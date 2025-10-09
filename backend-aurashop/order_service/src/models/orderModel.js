@@ -2,6 +2,11 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const Order = sequelize.define('Order', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
   userId: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -11,7 +16,7 @@ const Order = sequelize.define('Order', {
     allowNull: false,
   },
   totalPrice: {
-    type: DataTypes.FLOAT,
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
   status: {
@@ -19,7 +24,10 @@ const Order = sequelize.define('Order', {
     defaultValue: 'pending',
   },
 }, {
-  timestamps: true, // otomatis buat createdAt & updatedAt
+  tableName: 'orders',
+  timestamps: true,
+  paranoid: true,      // soft delete (optional)
+  underscored: true,   // nama kolom jadi snake_case
 });
 
 module.exports = Order;

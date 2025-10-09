@@ -1,5 +1,10 @@
+// src/config/db.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
+
+if (!process.env.DB_NAME || !process.env.DB_USER) {
+  throw new Error('❌ Missing database environment variables!');
+}
 
 const sequelize = new Sequelize(
   process.env.DB_NAME,
@@ -9,7 +14,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'mysql',
-    logging: false, // biar terminal gak rame
+    logging: false,
   }
 );
 
@@ -17,8 +22,13 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL Connected');
+
+    // otomatis sinkron model
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database & models synchronized');
   } catch (error) {
     console.error('❌ Database connection error:', error.message);
+    throw error;
   }
 };
 

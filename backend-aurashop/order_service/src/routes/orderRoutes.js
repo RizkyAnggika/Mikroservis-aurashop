@@ -1,12 +1,43 @@
+// src/routes/orderRoutes.js
 const express = require('express');
-const { createOrder, getOrders } = require('../controllers/orderController');
+const {
+  createOrder,
+  getOrders,
+  getOrderById,
+  updateOrderStatus,
+  deleteOrder,
+} = require('../controllers/orderController');
 
 const router = express.Router();
 
-// endpoint untuk membuat pesanan
+/**
+ * @route   POST /api/orders
+ * @desc    Membuat pesanan baru
+ */
 router.post('/', createOrder);
 
-// endpoint untuk melihat semua pesanan
+/**
+ * @route   GET /api/orders
+ * @desc    Mengambil semua pesanan
+ */
 router.get('/', getOrders);
+
+/**
+ * @route   GET /api/orders/:id
+ * @desc    Mengambil satu pesanan berdasarkan ID
+ */
+router.get('/:id', getOrderById);
+
+/**
+ * @route   PUT /api/orders/:id/status
+ * @desc    Mengubah status pesanan (pending → completed)
+ */
+router.put('/:id/status', updateOrderStatus);
+
+/**
+ * @route   DELETE /api/orders/:id
+ * @desc    Menghapus pesanan
+ */
+router.delete('/:id', deleteOrder);
 
 module.exports = router;
