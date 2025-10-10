@@ -1,4 +1,3 @@
-// src/config/db.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -13,8 +12,8 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
-    dialect: 'mysql',
-    logging: false,
+    dialect: process.env.DB_DIALECT || 'mysql',
+    logging: process.env.DB_LOGGING === 'true',
   }
 );
 
@@ -22,9 +21,7 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL Connected');
-
-    // otomatis sinkron model
-    await sequelize.sync({ alter: true });
+    await sequelize.sync({ alter: true }); // aman, tidak hapus data
     console.log('✅ Database & models synchronized');
   } catch (error) {
     console.error('❌ Database connection error:', error.message);

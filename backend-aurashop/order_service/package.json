@@ -1,19 +1,29 @@
 {
   "name": "order_service",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Simple Order Service (Express + MySQL + Sequelize) untuk tugas microservice kuliah",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "microservice",
+    "express",
+    "mysql",
+    "sequelize",
+    "order-service"
+  ],
+  "author": "Kelompok Tugas Mikroservis",
+  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "mysql2": "^3.15.2",
-    "sequelize": "^6.37.7"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.11.3",
+    "sequelize": "^6.37.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }
