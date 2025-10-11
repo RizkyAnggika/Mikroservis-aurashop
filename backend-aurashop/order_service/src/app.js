@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const orderRoutes = require('./routes/orderRoutes');
 const errorHandler = require('./middleware/errorHandler');
+const paymentRoutes = require('./routes/paymentRoutes');
+app.use('/api', paymentRoutes);
+
 
 const app = express();
 
