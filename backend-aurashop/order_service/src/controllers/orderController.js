@@ -3,10 +3,21 @@ const Order = require('../models/orderModel');
 // 🟢 Buat pesanan baru
 exports.createOrder = async (req, res, next) => {
   try {
-    const { userId, items, totalPrice, status } = req.body;
-    if (!userId || !items || !totalPrice)
-      return res.status(400).json({ message: 'Data pesanan tidak lengkap' });
+    const { userId, items, status } = req.body;
 
+    // Validasi data
+    if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
+    }
+
+    // Hitung total harga otomatis dari items
+    const totalPrice = items.reduce((sum, item) => {
+      const price = parseFloat(item.price) || 0;
+      const qty = parseInt(item.qty) || 1;
+      return sum + price * qty;
+    }, 0);
+
+    // Buat pesanan baru
     const order = await Order.create({
       userId,
       items,
