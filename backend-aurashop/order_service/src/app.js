@@ -3,10 +3,8 @@ const cors = require('cors');
 const orderRoutes = require('./routes/orderRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const paymentRoutes = require('./routes/paymentRoutes');
-app.use('/api', paymentRoutes);
 
-
-const app = express();
+const app = express(); // 🟢 inisialisasi dulu baru gunakan
 
 // Middleware
 app.use(cors());
@@ -19,6 +17,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/orders', orderRoutes);
+app.use('/api', paymentRoutes); // ✅ dipindah ke bawah sini
 
 // Error Handler
 app.use(errorHandler);
