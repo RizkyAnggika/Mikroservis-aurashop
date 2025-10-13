@@ -1,0 +1,134 @@
+1. Deskripsi Singkat
+
+Order Service adalah layanan mikro (microservice) yang menangani pemesanan online pelanggan.
+Service ini berfungsi untuk membuat, membaca, memperbarui, dan menghapus pesanan (CRUD), serta memproses pembayaran online sederhana.
+
+Service ini dapat berkomunikasi dengan layanan lain seperti:
+
+Inventory Service → untuk mendapatkan data produk (nama, harga, stok, ukuran)
+
+Kasir Service → untuk konfirmasi pembayaran atau status pesanan offline
+
+2. Fitur Utama
+
+| Fitur                                         | Endpoint                 | Metode   | Deskripsi                                                            |
+| --------------------------------------------- | ------------------------ | -------- | -------------------------------------------------------------------- |
+| 🟢 Buat Pesanan Baru                          | `/api/orders`            | `POST`   | Menambahkan pesanan baru berdasarkan data user dan item yang dipilih |
+| 🔵 Ambil Semua Pesanan                        | `/api/orders`            | `GET`    | Mengambil daftar semua pesanan yang tersimpan di database            |
+| 🟣 Ambil Pesanan per ID                       | `/api/orders/:id`        | `GET`    | Melihat detail satu pesanan berdasarkan ID-nya                       |
+| 🟠 Ubah Status Pesanan                        | `/api/orders/:id/status` | `PUT`    | Mengubah status pesanan (misal dari `pending` ke `completed`)        |
+| 🔴 Hapus Pesanan                              | `/api/orders/:id`        | `DELETE` | Menghapus pesanan tertentu dari database                             |
+| 💳 Bayar Pesanan (Simulasi Pembayaran Online) | `/api/orders/:id/pay`    | `PUT`    | Mengubah status pesanan menjadi `paid` setelah pembayaran berhasil   |
+
+3. Struktur Folder
+
+order_service/
+│
+├── server.js              # Entry point utama untuk menjalankan server
+├── .env                   # Konfigurasi environment (database & port)
+│
+└── src/
+    ├── app.js             # Konfigurasi Express & routing utama
+    ├── config/
+    │   └── db.js          # Koneksi dan konfigurasi MySQL dengan Sequelize
+    ├── controllers/
+    │   └── orderController.js  # Logika CRUD & pembayaran pesanan
+    ├── models/
+    │   └── orderModel.js       # Struktur tabel pesanan (ORM Sequelize)
+    └── routes/
+        └── orderRoutes.js      # Definisi endpoint dan rute API
+
+4. Struktur Database (Tabel orders)
+
+| Kolom      | Tipe Data     | Keterangan                                                   |
+| ---------- | ------------- | ------------------------------------------------------------ |
+| id         | UUID (PK)     | ID unik pesanan                                              |
+| userId     | STRING        | ID pengguna yang membuat pesanan                             |
+| items      | JSON          | Daftar item yang dipesan (id, nama, harga, qty)              |
+| totalPrice | DECIMAL(10,2) | Total harga semua item                                       |
+| status     | STRING        | Status pesanan (`pending`, `paid`, `completed`, `cancelled`) |
+| created_at | TIMESTAMP     | Otomatis dibuat                                              |
+| updated_at | TIMESTAMP     | Otomatis diperbarui                                          |
+
+5. Contoh Request dan Response
+🟢 Membuat Pesanan Baru
+
+Request (POST /api/orders):
+
+{
+  "userId": "user123",
+  "items": [
+    { "productId": "p001", "name": "Nasi Goreng", "price": 20000, "qty": 2 },
+    { "productId": "p002", "name": "Es Teh", "price": 5000, "qty": 1 }
+  ],
+  "totalPrice": 45000
+}
+
+Response:
+
+{
+  "message": "✅ Pesanan berhasil dibuat",
+  "data": {
+    "id": "order-uuid",
+    "userId": "user123",
+    "totalPrice": 45000,
+    "status": "pending",
+    "items": [...],
+    "createdAt": "2025-10-08T04:00:00Z"
+  }
+}
+
+💳 Simulasi Pembayaran Online
+
+Request (PUT /api/orders/:id/pay):
+
+{}
+
+Response:
+
+{
+  "message": "💳 Pembayaran berhasil",
+  "data": {
+    "id": "order-uuid",
+    "status": "paid"
+  }
+}
+
+6. Cara Menjalankan Order Service
+Langkah 1 — Setup Database
+
+Pastikan MySQL sudah berjalan (bisa lokal atau container).
+Gunakan file .env seperti berikut:
+
+PORT=5001
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=orderdb
+DB_USER=root
+DB_PASSWORD=123456
+
+Langkah 2 — Install Dependency
+
+npm install
+
+Langkah 3 — Jalankan Service
+
+npm start
+
+Langkah 4 — Tes API
+
+Gunakan Postman / Thunder Client, dan coba endpoint:
+
+Langkah 4 — Tes API
+
+Gunakan Postman / Thunder Client, dan coba endpoint:
+
+7. Catatan Tambahan
+
+Jika sequelize.sync({ alter: true }) aktif, database akan otomatis menyesuaikan tabel.
+
+Data tidak akan terhapus saat server di-restart.
+
+Untuk versi produksi, sebaiknya alter: false agar struktur tabel tidak berubah otomatis.
+
+Payment di sini simulasi, bukan gateway sebenarnya (seperti Midtrans).

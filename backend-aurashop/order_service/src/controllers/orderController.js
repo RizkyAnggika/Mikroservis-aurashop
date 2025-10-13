@@ -1,26 +1,52 @@
 const Order = require('../models/orderModel');
+const { getProductById } = require('../services/inventoryService'); // 🔗 Integrasi ke inventory-service
 
 // 🟢 Buat pesanan baru
 exports.createOrder = async (req, res, next) => {
   try {
     const { userId, items, status } = req.body;
 
-    // Validasi data
+    // Validasi data dasar
     if (!userId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
     }
 
-    // Hitung total harga otomatis dari items
-    const totalPrice = items.reduce((sum, item) => {
-      const price = parseFloat(item.price) || 0;
-      const qty = parseInt(item.qty) || 1;
-      return sum + price * qty;
-    }, 0);
+    let totalPrice = 0;
+    const detailedItems = [];
 
-    // Buat pesanan baru
+    // 🔁 Ambil info produk dari inventory-service untuk tiap item
+    for (const item of items) {
+      if (!item.productId || !item.qty) {
+        return res.status(400).json({ message: 'Setiap item harus punya productId dan qty' });
+      }
+
+      // 🔗 Ambil data produk dari inventory-service
+      const product = await getProductById(item.productId);
+
+      if (!product || !product.id) {
+        return res.status(404).json({ message: `Produk dengan ID ${item.productId} tidak ditemukan` });
+      }
+
+      // 🔢 Pastikan harga berupa angka
+      const harga = Number(product.harga) || 0;
+      const qty = Number(item.qty) || 1;
+      const subtotal = harga * qty;
+
+      totalPrice += subtotal;
+
+      detailedItems.push({
+        productId: product.id,
+        nama_produk: product.nama_produk,
+        harga,
+        quantity: qty,
+        subtotal,
+      });
+    }
+
+    // 💾 Simpan pesanan ke database
     const order = await Order.create({
       userId,
-      items,
+      items: detailedItems,
       totalPrice,
       status: status || 'pending',
     });
@@ -30,6 +56,7 @@ exports.createOrder = async (req, res, next) => {
       data: order,
     });
   } catch (error) {
+    console.error('❌ createOrder error:', error);
     next(error);
   }
 };
@@ -51,8 +78,7 @@ exports.getOrders = async (req, res, next) => {
 exports.getOrderById = async (req, res, next) => {
   try {
     const order = await Order.findByPk(req.params.id);
-    if (!order)
-      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    if (!order) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({
       message: '📄 Detail pesanan berhasil diambil',
