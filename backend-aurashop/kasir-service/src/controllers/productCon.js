@@ -1,4 +1,4 @@
-const pool = require('../db');
+const pool = require('../config/db');
 
 // List products with optional query
 exports.list = async (req, res, next) => {
