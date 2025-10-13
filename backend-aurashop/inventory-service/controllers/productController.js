@@ -44,3 +44,18 @@ exports.deleteProduct = (req, res) => {
   });
 };
 
+// Tambahan untuk integrasi dengan order-service
+
+exports.reduceStock = (req, res) => {
+  const { id } = req.params;
+  const { quantity } = req.body;
+
+  // Panggil model untuk kurangi stok
+  Product.reduceStock(id, quantity, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (result.affectedRows === 0)
+      return res.status(400).json({ message: 'Stok tidak cukup atau produk tidak ditemukan.' });
+    res.json({ message: 'Stok berhasil dikurangi!' });
+  });
+};
+

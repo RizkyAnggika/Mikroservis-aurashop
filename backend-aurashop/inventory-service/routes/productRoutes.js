@@ -7,5 +7,6 @@ router.get('/:id', controller.getProductById);
 router.post('/', controller.createProduct);
 router.put('/:id', controller.updateProduct);
 router.delete('/:id', controller.deleteProduct);
+router.patch('/:id/reduce-stok', controller.reduceStock);
 
 module.exports = router;

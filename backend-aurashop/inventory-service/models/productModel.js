@@ -19,7 +19,12 @@ const Product = {
 
   delete: (id, callback) => {
     db.query('DELETE FROM products WHERE id = ?', [id], callback);
-  }
+  }, 
+
+  reduceStock: (id, quantity, callback) => {
+    const sql = 'UPDATE products SET stok = stok - ? WHERE id = ? AND stok >= ?';
+    db.query(sql, [quantity, id, quantity], callback);
+  },
 };
 
 module.exports = Product;
