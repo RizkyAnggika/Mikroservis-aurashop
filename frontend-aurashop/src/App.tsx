@@ -1,35 +1,46 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [count, setCount] = useState(0);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow border p-8 text-center">
+        <div className="flex items-center justify-center gap-6 mb-6">
+          <a href="https://vite.dev" target="_blank" rel="noreferrer">
+            <img
+              src={viteLogo}
+              alt="Vite"
+              className="h-14 transition hover:drop-shadow-lg"
+            />
+          </a>
+          <a href="https://react.dev" target="_blank" rel="noreferrer">
+            <img
+              src={reactLogo}
+              alt="React"
+              className="h-14 transition hover:drop-shadow-lg"
+            />
+          </a>
+        </div>
+
+        <h1 className="text-2xl font-bold tracking-tight">Vite + React + Tailwind</h1>
+        <p className="mt-2 text-gray-600">
+          Edit <code className="font-mono">src/App.tsx</code> dan simpan untuk HMR.
+        </p>
+
+        <button
+          onClick={() => setCount((c) => c + 1)}
+          className="mt-6 w-full rounded-xl px-4 py-3 font-medium bg-indigo-600 text-white hover:opacity-90 transition"
+        >
+          Klik aku ({count})
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
+
+        <p className="mt-4 text-sm text-gray-500">
+          Count disimpan di state React (hot reload aman).
         </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </main>
+  );
 }
-
-export default App
