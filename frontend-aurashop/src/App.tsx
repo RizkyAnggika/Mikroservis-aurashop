@@ -1,46 +1,24 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Index from './pages/Index';
+import NotFound from './pages/NotFound';
 
-export default function App() {
-  const [count, setCount] = useState(0);
+const queryClient = new QueryClient();
 
-  return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow border p-8 text-center">
-        <div className="flex items-center justify-center gap-6 mb-6">
-          <a href="https://vite.dev" target="_blank" rel="noreferrer">
-            <img
-              src={viteLogo}
-              alt="Vite"
-              className="h-14 transition hover:drop-shadow-lg"
-            />
-          </a>
-          <a href="https://react.dev" target="_blank" rel="noreferrer">
-            <img
-              src={reactLogo}
-              alt="React"
-              className="h-14 transition hover:drop-shadow-lg"
-            />
-          </a>
-        </div>
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
-        <h1 className="text-2xl font-bold tracking-tight">Vite + React + Tailwind</h1>
-        <p className="mt-2 text-gray-600">
-          Edit <code className="font-mono">src/App.tsx</code> dan simpan untuk HMR.
-        </p>
-
-        <button
-          onClick={() => setCount((c) => c + 1)}
-          className="mt-6 w-full rounded-xl px-4 py-3 font-medium bg-indigo-600 text-white hover:opacity-90 transition"
-        >
-          Klik aku ({count})
-        </button>
-
-        <p className="mt-4 text-sm text-gray-500">
-          Count disimpan di state React (hot reload aman).
-        </p>
-      </div>
-    </main>
-  );
-}
+export default App;
