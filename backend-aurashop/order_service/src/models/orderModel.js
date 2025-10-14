@@ -1,48 +1,31 @@
-const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/db');
+const db = require('../config/db');
 
-const Order = sequelize.define('Order', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
+const Order = {
+  create: (orderData, callback) => {
+    const query = 'INSERT INTO orders (userId, items, totalPrice, status) VALUES (?, ?, ?, ?)';
+    db.query(query, [
+      orderData.userId,
+      JSON.stringify(orderData.items),
+      orderData.totalPrice,
+      orderData.status || 'pending'
+    ], callback);
   },
-  userId: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: { notEmpty: { msg: 'userId tidak boleh kosong' } },
+
+  findAll: (callback) => {
+    db.query('SELECT * FROM orders', callback);
   },
-  items: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    validate: {
-      isArray(value) {
-        if (!Array.isArray(value)) {
-          throw new Error('items harus berupa array');
-        }
-      },
-    },
+
+  findById: (id, callback) => {
+    db.query('SELECT * FROM orders WHERE id = ?', [id], callback);
   },
-  totalPrice: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-    validate: { min: 0 },
+
+  updateStatus: (id, status, callback) => {
+    db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id], callback);
   },
-  status: {
-    type: DataTypes.STRING,
-    defaultValue: 'pending',
-    validate: {
-      isIn: {
-        args: [['pending', 'paid', 'shipped', 'completed', 'cancelled']],
-        msg: 'Status tidak valid',
-      },
-    },
+
+  delete: (id, callback) => {
+    db.query('DELETE FROM orders WHERE id = ?', [id], callback);
   },
-}, {
-  tableName: 'orders',
-  timestamps: true,
-  paranoid: true,
-  underscored: true,
-});
+};
 
 module.exports = Order;
