@@ -4,13 +4,14 @@ const inventoryService = require('../services/inventoryService'); // 🔗 Integr
 // 🟢 Buat pesanan baru
 exports.createOrder = async (req, res, next) => {
   try {
-    const { userId, items, order_status } = req.body;
+    const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
 
-    if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+    // 🔍 Validasi input dasar
+    if (!userId || !customer_name || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
     }
 
-    let totalPrice = 0;
+    let calculatedTotalPrice = 0;
     const detailedItems = [];
 
     // 🔁 Ambil data produk dari inventory-service
@@ -19,7 +20,7 @@ exports.createOrder = async (req, res, next) => {
         return res.status(400).json({ message: 'Setiap item harus punya productId dan qty' });
       }
 
-      // 🔗 Ambil data produk
+      // 🔗 Ambil data produk dari inventory service
       const product = await inventoryService.getProductById(item.productId);
 
       if (!product || !product.id) {
@@ -30,7 +31,7 @@ exports.createOrder = async (req, res, next) => {
       const qty = Number(item.qty) || 1;
       const subtotal = harga * qty;
 
-      totalPrice += subtotal;
+      calculatedTotalPrice += subtotal;
 
       detailedItems.push({
         productId: product.id,
@@ -41,13 +42,18 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    // 💾 Simpan ke DB (callback -> Promise wrapper)
+    // Gunakan totalPrice dari perhitungan jika tidak dikirim manual
+    const finalTotalPrice = totalPrice || calculatedTotalPrice;
+
+    // 💾 Simpan ke database
     await new Promise((resolve, reject) => {
       Order.create(
         {
           userId,
+          customer_name,
           items: detailedItems,
-          totalPrice,
+          totalPrice: finalTotalPrice,
+          note: note || null,
           order_status: order_status || 'pending',
         },
         (err, result) => {
@@ -61,8 +67,10 @@ exports.createOrder = async (req, res, next) => {
       message: '✅ Pesanan berhasil dibuat',
       data: {
         userId,
+        customer_name,
         items: detailedItems,
-        totalPrice,
+        totalPrice: finalTotalPrice,
+        note: note || null,
         order_status: order_status || 'pending',
       },
     });
@@ -88,7 +96,8 @@ exports.getOrderById = (req, res, next) => {
   const id = req.params.id;
   Order.findById(id, (err, results) => {
     if (err) return next(err);
-    if (results.length === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    if (results.length === 0)
+      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({
       message: '📄 Detail pesanan berhasil diambil',
@@ -102,11 +111,13 @@ exports.updateOrderStatus = (req, res, next) => {
   const id = req.params.id;
   const { order_status } = req.body;
 
-  if (!order_status) return res.status(400).json({ message: 'Status baru harus diisi' });
+  if (!order_status)
+    return res.status(400).json({ message: 'Status baru harus diisi' });
 
   Order.updateStatus(id, order_status, (err, result) => {
     if (err) return next(err);
-    if (result.affectedRows === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    if (result.affectedRows === 0)
+      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({
       message: `🟢 Status pesanan dengan ID ${id} berhasil diubah menjadi "${order_status}"`,
@@ -120,7 +131,8 @@ exports.deleteOrder = (req, res, next) => {
 
   Order.delete(id, (err, result) => {
     if (err) return next(err);
-    if (result.affectedRows === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    if (result.affectedRows === 0)
+      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({ message: '🗑️ Pesanan berhasil dihapus' });
   });
