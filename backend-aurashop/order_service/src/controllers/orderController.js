@@ -1,12 +1,11 @@
 const Order = require('../models/orderModel');
-const { getProductById } = require('../services/inventoryService'); // 🔗 Integrasi ke inventory-service
+const inventoryService = require('../services/inventoryService'); // 🔗 Integrasi ke inventory-service
 
 // 🟢 Buat pesanan baru
 exports.createOrder = async (req, res, next) => {
   try {
-    const { userId, items, status } = req.body;
+    const { userId, items, order_status } = req.body;
 
-    // Validasi data dasar
     if (!userId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
     }
@@ -14,20 +13,19 @@ exports.createOrder = async (req, res, next) => {
     let totalPrice = 0;
     const detailedItems = [];
 
-    // 🔁 Ambil info produk dari inventory-service untuk tiap item
+    // 🔁 Ambil data produk dari inventory-service
     for (const item of items) {
       if (!item.productId || !item.qty) {
         return res.status(400).json({ message: 'Setiap item harus punya productId dan qty' });
       }
 
-      // 🔗 Ambil data produk dari inventory-service
-      const product = await getProductById(item.productId);
+      // 🔗 Ambil data produk
+      const product = await inventoryService.getProductById(item.productId);
 
       if (!product || !product.id) {
         return res.status(404).json({ message: `Produk dengan ID ${item.productId} tidak ditemukan` });
       }
 
-      // 🔢 Pastikan harga berupa angka
       const harga = Number(product.harga) || 0;
       const qty = Number(item.qty) || 1;
       const subtotal = harga * qty;
@@ -43,17 +41,30 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    // 💾 Simpan pesanan ke database
-    const order = await Order.create({
-      userId,
-      items: detailedItems,
-      totalPrice,
-      status: status || 'pending',
+    // 💾 Simpan ke DB (callback -> Promise wrapper)
+    await new Promise((resolve, reject) => {
+      Order.create(
+        {
+          userId,
+          items: detailedItems,
+          totalPrice,
+          order_status: order_status || 'pending',
+        },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        }
+      );
     });
 
     res.status(201).json({
       message: '✅ Pesanan berhasil dibuat',
-      data: order,
+      data: {
+        userId,
+        items: detailedItems,
+        totalPrice,
+        order_status: order_status || 'pending',
+      },
     });
   } catch (error) {
     console.error('❌ createOrder error:', error);
@@ -62,63 +73,55 @@ exports.createOrder = async (req, res, next) => {
 };
 
 // 🔵 Ambil semua pesanan
-exports.getOrders = async (req, res, next) => {
-  try {
-    const orders = await Order.findAll();
+exports.getOrders = (req, res, next) => {
+  Order.findAll((err, results) => {
+    if (err) return next(err);
     res.status(200).json({
       message: '📦 Daftar pesanan berhasil diambil',
-      data: orders,
+      data: results,
     });
-  } catch (error) {
-    next(error);
-  }
+  });
 };
 
 // 🟣 Ambil satu pesanan berdasarkan ID
-exports.getOrderById = async (req, res, next) => {
-  try {
-    const order = await Order.findByPk(req.params.id);
-    if (!order) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+exports.getOrderById = (req, res, next) => {
+  const id = req.params.id;
+  Order.findById(id, (err, results) => {
+    if (err) return next(err);
+    if (results.length === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({
       message: '📄 Detail pesanan berhasil diambil',
-      data: order,
+      data: results[0],
     });
-  } catch (error) {
-    next(error);
-  }
+  });
 };
 
 // 🟠 Ubah status pesanan
-exports.updateOrderStatus = async (req, res, next) => {
-  try {
-    const { status } = req.body;
-    const order = await Order.findByPk(req.params.id);
+exports.updateOrderStatus = (req, res, next) => {
+  const id = req.params.id;
+  const { order_status } = req.body;
 
-    if (!order) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
-    if (!status) return res.status(400).json({ message: 'Status baru harus diisi' });
+  if (!order_status) return res.status(400).json({ message: 'Status baru harus diisi' });
 
-    const oldStatus = order.status;
-    order.status = status;
-    await order.save();
+  Order.updateStatus(id, order_status, (err, result) => {
+    if (err) return next(err);
+    if (result.affectedRows === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({
-      message: `🟢 Status pesanan diubah dari "${oldStatus}" ke "${status}"`,
-      data: order,
+      message: `🟢 Status pesanan dengan ID ${id} berhasil diubah menjadi "${order_status}"`,
     });
-  } catch (error) {
-    next(error);
-  }
+  });
 };
 
 // 🔴 Hapus pesanan
-exports.deleteOrder = async (req, res, next) => {
-  try {
-    const deleted = await Order.destroy({ where: { id: req.params.id } });
-    if (!deleted) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+exports.deleteOrder = (req, res, next) => {
+  const id = req.params.id;
+
+  Order.delete(id, (err, result) => {
+    if (err) return next(err);
+    if (result.affectedRows === 0) return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
 
     res.status(200).json({ message: '🗑️ Pesanan berhasil dihapus' });
-  } catch (error) {
-    next(error);
-  }
+  });
 };

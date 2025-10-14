@@ -1,31 +1,35 @@
+// 📁 src/models/paymentModel.js
 const db = require('../config/db');
 
-const Order = {
-  create: (orderData, callback) => {
-    const query = 'INSERT INTO orders (userId, items, totalPrice, status) VALUES (?, ?, ?, ?)';
+const Payment = {
+  // 🟢 Buat pembayaran baru
+  create: (paymentData, callback) => {
+    const query = `
+      INSERT INTO payments (orderId, paymentMethod, amount, status)
+      VALUES (?, ?, ?, ?)
+    `;
     db.query(query, [
-      orderData.userId,
-      JSON.stringify(orderData.items),
-      orderData.totalPrice,
-      orderData.status || 'pending'
+      paymentData.orderId,
+      paymentData.paymentMethod,
+      paymentData.amount,
+      paymentData.status || 'success',
     ], callback);
   },
 
+  // 🔵 Ambil semua pembayaran
   findAll: (callback) => {
-    db.query('SELECT * FROM orders', callback);
+    db.query('SELECT * FROM payments', callback);
   },
 
+  // 🟣 Ambil pembayaran berdasarkan ID
   findById: (id, callback) => {
-    db.query('SELECT * FROM orders WHERE id = ?', [id], callback);
+    db.query('SELECT * FROM payments WHERE id = ?', [id], callback);
   },
 
-  updateStatus: (id, status, callback) => {
-    db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id], callback);
-  },
-
+  // 🟠 Hapus pembayaran
   delete: (id, callback) => {
-    db.query('DELETE FROM orders WHERE id = ?', [id], callback);
+    db.query('DELETE FROM payments WHERE id = ?', [id], callback);
   },
 };
 
-module.exports = Order;
+module.exports = Payment;
