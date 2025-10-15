@@ -1,16 +1,18 @@
-const mysql = require('mysql2/promise');
-const dotenv = require('dotenv');
-dotenv.config();
+const mysql = require("mysql2");
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'tea_pos',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+const db = mysql.createConnection({
+  host: "localhost",
+  user: "root",
+  password: "",
+  database: "toko_teh",
 });
 
-module.exports = pool;
+db.connect((err) => {
+  if (err) {
+    console.error("Koneksi database gagal:", err);
+  } else {
+    console.log("Koneksi database berhasil");
+  }
+});
+
+module.exports = db;
