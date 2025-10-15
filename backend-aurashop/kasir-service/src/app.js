@@ -1,23 +1,19 @@
-const express = require('express');
+const express = require("express");
+const cors = require("cors");
 const app = express();
-const authRoutes = require('./routes/auth');
-const productRoutes = require('./routes/products');
-const transactionRoutes = require('./routes/transactions');
 
+const productRoutes = require("./routes/products");
+const transactionRoutes = require("./routes/transactions");
+
+app.use(cors());
 app.use(express.json());
 
-// routes
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/transactions', transactionRoutes);
+// Routing utama
+app.use("/api/produk", productRoutes);
+app.use("/api/transaksi", transactionRoutes);
 
-// simple health
-app.get('/api/health', (req, res) => res.json({ ok: true, ts: new Date() }));
-
-// error handler basic
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+app.get("/", (req, res) => {
+  res.send("Kasir Service Toko Teh Berjalan 🚀");
 });
 
 module.exports = app;
