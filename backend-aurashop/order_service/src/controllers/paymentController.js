@@ -1,4 +1,3 @@
-// 📁 controllers/paymentController.js
 const Payment = require('../models/paymentModel');
 const Order = require('../models/orderModel');
 const inventoryService = require('../services/inventoryService'); // 🧩 tambahkan import ini
