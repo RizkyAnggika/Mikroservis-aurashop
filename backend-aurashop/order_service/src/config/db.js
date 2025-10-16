@@ -1,13 +1,9 @@
 const mysql = require('mysql2');
 
 const db = mysql.createConnection({
-  host: 'localhost',          // nanti ganti IP temanmu kalau beda device
+  host: 'localhost',
   user: 'root',
-<<<<<<< HEAD
-  password: '',               // samain dengan MySQL temen kamu
-=======
   password: '',
->>>>>>> f661b9835616ba06ffa3ed8fa44e74d8210df073
   database: 'aurashop_inventory',
 });
 
