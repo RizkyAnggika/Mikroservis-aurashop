@@ -1,25 +1,29 @@
-const express = require('express');
-const cors = require('cors');
-const orderRoutes = require('./routes/orderRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
-const errorHandler = require('./middleware/errorHandler');
+require('dotenv').config();
+const db = require('./src/config/db'); // koneksi mysql2
+const app = require('./src/app'); // modular express app
 
-const app = express();
+const PORT = process.env.PORT || 5001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+const startServer = () => {
+  try {
+    // Pastikan MySQL connect dulu
+    db.getConnection((err, connection) => {
+      if (err) {
+        console.error('❌ Gagal konek ke database:', err.message);
+        process.exit(1);
+      } else {
+        console.log('✅ Database connected successfully');
+        connection.release(); // lepas koneksi setelah tes
 
-// Health Check (buat ngecek status service)
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', service: 'order_service' });
-});
+        app.listen(PORT, () => {
+          console.log(`🚀 Order Service running on port ${PORT}`);
+        });
+      }
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
 
-// Routes utama
-app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes); // 🔧 lebih spesifik endpoint-nya
-
-// Error Handler (taruh paling bawah)
-app.use(errorHandler);
-
-module.exports = app;
+startServer();
