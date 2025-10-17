@@ -86,7 +86,7 @@ export default function Shop() {
             <div className="flex items-center gap-3">
               <Coffee className="w-8 h-8 text-green-600" />
               <div>
-                <h1 className="text-2xl font-bold text-gray-800">TeaShop</h1>
+                <h1 className="text-2xl font-bold text-gray-800">Aura TeaShop</h1>
                 <p className="text-sm text-gray-600">Premium Tea Collection</p>
               </div>
             </div>
