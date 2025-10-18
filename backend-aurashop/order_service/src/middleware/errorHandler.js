@@ -1,10 +1,24 @@
 module.exports = (err, req, res, next) => {
-  console.error('🔥 Error:', err);
+  // Log error lengkap di server console
+  console.error('🔥 [ERROR HANDLER]', {
+    message: err.message,
+    stack: err.stack,
+    path: req.originalUrl,
+    method: req.method,
+  });
 
-  res.status(err.status || 500).json({
+  // Tentukan status code (default 500)
+  const statusCode = err.status || 500;
+
+  // Kirim respons JSON
+  res.status(statusCode).json({
     success: false,
+    status: statusCode,
     message: err.message || 'Terjadi kesalahan pada server',
-    // opsional tambahan untuk debug
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    ...(process.env.NODE_ENV !== 'production' && { 
+      stack: err.stack,
+      path: req.originalUrl,
+      method: req.method,
+    }),
   });
 };
