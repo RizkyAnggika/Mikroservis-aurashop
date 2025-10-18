@@ -1,20 +1,32 @@
 require('dotenv').config();
-const db = require('./src/config/db'); // 🔹 koneksi MySQL
-const app = require('./src/app'); // modular app
+const chalk = require('chalk');
+const db = require('./src/config/db');
+const app = require('./src/app');
 
 const PORT = process.env.PORT || 5001;
 
+// Global error handlers
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err.message);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('💥 Unhandled Rejection:', reason);
+});
+
 const startServer = () => {
   try {
-    // Pastikan koneksi aktif dulu
     db.ping((err) => {
       if (err) {
-        console.error('❌ Gagal konek ke database:', err.message);
+        console.error(chalk.red('❌ Gagal konek ke database:'), err.message);
         process.exit(1);
       } else {
-        console.log('✅ Database connected successfully');
+        console.log(chalk.green('✅ Database connected successfully'));
+        console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
         app.listen(PORT, () => {
-          console.log(`🚀 Order Service running on port ${PORT}`);
+          console.log(chalk.blue(`🚀 Order Service running on port ${PORT}`));
         });
       }
     });
