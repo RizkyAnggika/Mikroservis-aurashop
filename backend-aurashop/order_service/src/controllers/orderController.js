@@ -7,7 +7,7 @@ exports.createOrder = async (req, res, next) => {
     const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
 
     // 🔍 Validasi input dasar
-    if (!userId || !customer_name || !items || !Array.isArray(items) || items.length === 0) {
+    if (!userId || !customer_name || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
     }
 
@@ -42,11 +42,11 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    // Gunakan totalPrice dari perhitungan jika tidak dikirim manual
+    // 💰 Gunakan totalPrice hasil hitungan (kalau tidak dikirim dari client)
     const finalTotalPrice = totalPrice || calculatedTotalPrice;
 
-    // 💾 Simpan ke database
-    await new Promise((resolve, reject) => {
+    // 💾 Simpan pesanan ke database
+    const result = await new Promise((resolve, reject) => {
       Order.create(
         {
           userId,
@@ -56,16 +56,14 @@ exports.createOrder = async (req, res, next) => {
           note: note || null,
           order_status: order_status || 'pending',
         },
-        (err, result) => {
-          if (err) return reject(err);
-          resolve(result);
-        }
+        (err, res) => (err ? reject(err) : resolve(res))
       );
     });
 
     res.status(201).json({
       message: '✅ Pesanan berhasil dibuat',
       data: {
+        orderId: result.insertId,
         userId,
         customer_name,
         items: detailedItems,
@@ -80,60 +78,124 @@ exports.createOrder = async (req, res, next) => {
   }
 };
 
-// 🔵 Ambil semua pesanan
-exports.getOrders = (req, res, next) => {
-  Order.findAll((err, results) => {
-    if (err) return next(err);
+// 🔵 Ambil semua pesanan (admin)
+exports.getOrders = async (req, res, next) => {
+  try {
+    const results = await new Promise((resolve, reject) => {
+      Order.findAll((err, rows) => (err ? reject(err) : resolve(rows)));
+    });
+
+    // 🧩 Parse kolom items (JSON)
+    const formatted = results.map(order => ({
+      ...order,
+      items: JSON.parse(order.items),
+    }));
+
     res.status(200).json({
       message: '📦 Daftar pesanan berhasil diambil',
-      data: results,
+      data: formatted,
     });
-  });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // 🟣 Ambil satu pesanan berdasarkan ID
-exports.getOrderById = (req, res, next) => {
-  const id = req.params.id;
-  Order.findById(id, (err, results) => {
-    if (err) return next(err);
-    if (results.length === 0)
+exports.getOrderById = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const result = await new Promise((resolve, reject) => {
+      Order.findById(id, (err, rows) => (err ? reject(err) : resolve(rows)));
+    });
+
+    if (result.length === 0) {
       return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    }
+
+    const order = result[0];
+    order.items = JSON.parse(order.items);
 
     res.status(200).json({
       message: '📄 Detail pesanan berhasil diambil',
-      data: results[0],
+      data: order,
     });
-  });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 🟢 Ambil semua pesanan milik user tertentu (riwayat pesanan)
+exports.getOrdersByUser = async (req, res, next) => {
+  try {
+    const userId = req.params.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID wajib diisi' });
+    }
+
+    const results = await new Promise((resolve, reject) => {
+      Order.findByUserId(userId, (err, rows) => (err ? reject(err) : resolve(rows)));
+    });
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: '❌ Belum ada riwayat pesanan untuk user ini' });
+    }
+
+    const formatted = results.map(order => ({
+      ...order,
+      items: JSON.parse(order.items),
+    }));
+
+    res.status(200).json({
+      message: '📜 Riwayat pesanan pengguna berhasil diambil',
+      data: formatted,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // 🟠 Ubah status pesanan
-exports.updateOrderStatus = (req, res, next) => {
-  const id = req.params.id;
-  const { order_status } = req.body;
+exports.updateOrderStatus = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const { order_status } = req.body;
 
-  if (!order_status)
-    return res.status(400).json({ message: 'Status baru harus diisi' });
+    if (!order_status) {
+      return res.status(400).json({ message: 'Status baru harus diisi' });
+    }
 
-  Order.updateStatus(id, order_status, (err, result) => {
-    if (err) return next(err);
-    if (result.affectedRows === 0)
+    const result = await new Promise((resolve, reject) => {
+      Order.updateStatus(id, order_status, (err, res) => (err ? reject(err) : resolve(res)));
+    });
+
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    }
 
     res.status(200).json({
       message: `🟢 Status pesanan dengan ID ${id} berhasil diubah menjadi "${order_status}"`,
     });
-  });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // 🔴 Hapus pesanan
-exports.deleteOrder = (req, res, next) => {
-  const id = req.params.id;
+exports.deleteOrder = async (req, res, next) => {
+  try {
+    const id = req.params.id;
 
-  Order.delete(id, (err, result) => {
-    if (err) return next(err);
-    if (result.affectedRows === 0)
+    const result = await new Promise((resolve, reject) => {
+      Order.delete(id, (err, res) => (err ? reject(err) : resolve(res)));
+    });
+
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    }
 
     res.status(200).json({ message: '🗑️ Pesanan berhasil dihapus' });
-  });
+  } catch (error) {
+    next(error);
+  }
 };

@@ -12,7 +12,7 @@ const Order = {
       [
         data.userId,
         data.customer_name,
-        JSON.stringify(data.items),
+        JSON.stringify(data.items), // simpan sebagai JSON string
         data.totalPrice,
         data.note,
         data.order_status,
@@ -29,6 +29,24 @@ const Order = {
   // 🟣 Ambil pesanan berdasarkan ID
   findById: (id, callback) => {
     db.query('SELECT * FROM orders WHERE id = ?', [id], callback);
+  },
+
+  // 🟢 Ambil semua pesanan berdasarkan userId (riwayat per user)
+  findByUserId: (userId, callback) => {
+    db.query(
+      'SELECT * FROM orders WHERE userId = ? ORDER BY created_at DESC',
+      [userId],
+      callback
+    );
+  },
+
+  // 🟣 Ambil semua pesanan berdasarkan status (paid, pending, canceled, dll)
+  findByStatus: (status, callback) => {
+    db.query(
+      'SELECT * FROM orders WHERE order_status = ? ORDER BY created_at DESC',
+      [status],
+      callback
+    );
   },
 
   // 🟠 Update status pesanan
