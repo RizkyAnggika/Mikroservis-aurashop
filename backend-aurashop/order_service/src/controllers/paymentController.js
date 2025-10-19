@@ -14,13 +14,8 @@ exports.createPayment = async (req, res, next) => {
     }
 
     // 🔍 Ambil data order
-    const orders = await new Promise((resolve, reject) => {
-      Order.findById(orderId, (err, result) => (err ? reject(err) : resolve(result)));
-    });
-
-    if (orders.length === 0) throw new HttpError('Pesanan tidak ditemukan', 404);
-
-    const order = orders[0];
+    const order = await Order.findById(orderId);
+    if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
 
     if (order.order_status === 'paid') {
       throw new HttpError('Pesanan sudah dibayar', 400);
@@ -31,24 +26,17 @@ exports.createPayment = async (req, res, next) => {
     }
 
     // 💳 Simpan data pembayaran
-    const paymentResult = await new Promise((resolve, reject) => {
-      Payment.create(
-        {
-          orderId,
-          paymentMethod,
-          amount,
-          status: 'success',
-        },
-        (err, result) => (err ? reject(err) : resolve(result))
-      );
+    const paymentResult = await Payment.create({
+      orderId,
+      paymentMethod,
+      amount,
+      status: 'success',
     });
 
     // 🔄 Update status order jadi 'paid'
-    await new Promise((resolve, reject) => {
-      Order.updateStatus(orderId, 'paid', (err, result) => (err ? reject(err) : resolve(result)));
-    });
+    await Order.updateStatus(orderId, 'paid');
 
-    // 🧾 Ambil daftar item dari order dan kurangi stok
+    // 🧾 Kurangi stok produk dari order items
     try {
       const orderItems = JSON.parse(order.items || '[]');
 
@@ -58,7 +46,6 @@ exports.createPayment = async (req, res, next) => {
       }
     } catch (reduceError) {
       console.error('❌ Error saat update stok:', reduceError.message);
-      // stok gagal update tapi pembayaran tetap sukses
       throw new HttpError('Pembayaran berhasil tapi gagal memperbarui stok produk', 500);
     }
 
