@@ -1,7 +1,7 @@
 require('dotenv').config();
 const mysql = require('mysql2');
 
-// 🧩 Gunakan pool biar koneksi otomatis dikelola
+// 🔹 Gunakan connection pool agar efisien dan otomatis mengatur koneksi
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -9,11 +9,11 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'aurashop_inventory',
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10, // 🔢 maksimal koneksi bersamaan
+  connectionLimit: 10, // Maksimal koneksi bersamaan
   queueLimit: 0,
 });
 
-// 🧠 Tes koneksi awal
+// 🔹 Tes koneksi awal
 pool.getConnection((err, connection) => {
   if (err) {
     console.error('❌ Gagal konek ke MySQL:', err.message);
@@ -23,5 +23,5 @@ pool.getConnection((err, connection) => {
   }
 });
 
-// Export pool biar bisa pakai async/await dengan promise wrapper
-module.exports = pool.promise();
+// 🔹 Export pool (bukan promise)
+module.exports = pool;
