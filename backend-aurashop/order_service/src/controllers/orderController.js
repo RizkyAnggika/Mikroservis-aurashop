@@ -1,8 +1,12 @@
+// 📁 controllers/orderController.js
 const Order = require('../models/orderModel');
+const Payment = require('../models/paymentModel'); // untuk invoice
 const inventoryService = require('../services/inventoryService');
 const HttpError = require('../utils/HttpError');
 
+// ===============================
 // 🟢 Buat pesanan baru
+// ===============================
 exports.createOrder = async (req, res, next) => {
   try {
     const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
@@ -69,7 +73,9 @@ exports.createOrder = async (req, res, next) => {
   }
 };
 
-// 🔵 Ambil semua pesanan
+// ===============================
+// 🔵 Ambil semua pesanan (Admin)
+// ===============================
 exports.getOrders = async (req, res, next) => {
   try {
     const results = await Order.findAll();
@@ -87,14 +93,15 @@ exports.getOrders = async (req, res, next) => {
   }
 };
 
+// ===============================
 // 🟣 Ambil pesanan berdasarkan ID
+// ===============================
 exports.getOrderById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const order = await Order.findById(id);
 
     if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
-
     order.items = JSON.parse(order.items || '[]');
 
     res.status(200).json({
@@ -106,7 +113,34 @@ exports.getOrderById = async (req, res, next) => {
   }
 };
 
-// 🟢 Ambil pesanan berdasarkan userId (riwayat)
+// ===============================
+// 🧾 Ambil invoice (order + payment)
+// ===============================
+exports.getInvoiceByOrderId = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findById(id);
+    if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
+
+    order.items = JSON.parse(order.items || '[]');
+    const payment = await Payment.findByOrderId(id);
+
+    res.status(200).json({
+      message: '🧾 Invoice berhasil diambil',
+      data: {
+        order,
+        payment: payment || { message: 'Belum ada pembayaran untuk pesanan ini' },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===============================
+// 🟢 Ambil pesanan berdasarkan userId
+// ===============================
 exports.getOrdersByUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
@@ -129,7 +163,9 @@ exports.getOrdersByUser = async (req, res, next) => {
   }
 };
 
+// ===============================
 // 🟠 Ubah status pesanan
+// ===============================
 exports.updateOrderStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -148,7 +184,9 @@ exports.updateOrderStatus = async (req, res, next) => {
   }
 };
 
+// ===============================
 // 🔴 Hapus pesanan
+// ===============================
 exports.deleteOrder = async (req, res, next) => {
   try {
     const { id } = req.params;

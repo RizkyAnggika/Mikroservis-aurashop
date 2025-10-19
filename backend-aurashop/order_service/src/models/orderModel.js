@@ -1,4 +1,3 @@
-// 📁 models/orderModel.js
 const db = require('../config/db');
 
 const Order = {
@@ -62,6 +61,23 @@ const Order = {
   delete: async (id) => {
     const [result] = await db.query('DELETE FROM orders WHERE id = ?', [id]);
     return result;
+  },
+
+  // 🧾 Ambil pesanan + pembayaran (untuk invoice)
+  findWithPaymentById: async (orderId) => {
+    const query = `
+      SELECT 
+        o.*, 
+        p.id AS payment_id,
+        p.paymentMethod,
+        p.amount AS payment_amount,
+        p.status AS payment_status
+      FROM orders o
+      LEFT JOIN payments p ON o.id = p.orderId
+      WHERE o.id = ?
+    `;
+    const [rows] = await db.query(query, [orderId]);
+    return rows[0];
   },
 };
 
