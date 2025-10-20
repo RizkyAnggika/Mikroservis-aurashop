@@ -1,7 +1,6 @@
-const app = require("./app");
+const app = require('./app');
 
-const PORT = process.env.PORT || 5000;
-
+const PORT = 4002;
 app.listen(PORT, () => {
-  console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
+  console.log(`🧾 Kasir service running on http://localhost:${PORT}`);
 });

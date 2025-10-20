@@ -1,19 +1,13 @@
-const express = require("express");
-const cors = require("cors");
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const productRoutes = require('./routes/products');
+
 const app = express();
-
-const productRoutes = require("./routes/products");
-const transactionRoutes = require("./routes/transactions");
-
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Routing utama
-app.use("/api/produk", productRoutes);
-app.use("/api/transaksi", transactionRoutes);
-
-app.get("/", (req, res) => {
-  res.send("Kasir Service Toko Teh Berjalan 🚀");
-});
+// route utama kasir
+app.use('/api/products', productRoutes);
 
 module.exports = app;

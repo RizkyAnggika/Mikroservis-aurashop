@@ -1,34 +1,36 @@
+// 📁 controllers/orderController.js
 const Order = require('../models/orderModel');
-const inventoryService = require('../services/inventoryService'); // 🔗 Integrasi ke inventory-service
+const Payment = require('../models/paymentModel'); // untuk invoice
+const inventoryService = require('../services/inventoryService');
+const HttpError = require('../utils/HttpError');
 
+// ===============================
 // 🟢 Buat pesanan baru
+// ===============================
 exports.createOrder = async (req, res, next) => {
   try {
     const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
 
-    // 🔍 Validasi input dasar
-    if (!userId || !customer_name || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'Data pesanan tidak lengkap atau format items salah' });
+    if (!userId || !customer_name || !Array.isArray(items) || items.length === 0) {
+      throw new HttpError('Data pesanan tidak lengkap atau format items salah', 400);
     }
 
     let calculatedTotalPrice = 0;
     const detailedItems = [];
 
-    // 🔁 Ambil data produk dari inventory-service
+    // 🔁 Validasi & hitung total
     for (const item of items) {
       if (!item.productId || !item.qty) {
-        return res.status(400).json({ message: 'Setiap item harus punya productId dan qty' });
+        throw new HttpError('Setiap item harus punya productId dan qty', 400);
       }
 
-      // 🔗 Ambil data produk dari inventory service
       const product = await inventoryService.getProductById(item.productId);
-
       if (!product || !product.id) {
-        return res.status(404).json({ message: `Produk dengan ID ${item.productId} tidak ditemukan` });
+        throw new HttpError(`Produk dengan ID ${item.productId} tidak ditemukan`, 404);
       }
 
       const harga = Number(product.harga) || 0;
-      const qty = Number(item.qty) || 1;
+      const qty = Number(item.qty);
       const subtotal = harga * qty;
 
       calculatedTotalPrice += subtotal;
@@ -42,30 +44,22 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    // Gunakan totalPrice dari perhitungan jika tidak dikirim manual
     const finalTotalPrice = totalPrice || calculatedTotalPrice;
 
-    // 💾 Simpan ke database
-    await new Promise((resolve, reject) => {
-      Order.create(
-        {
-          userId,
-          customer_name,
-          items: detailedItems,
-          totalPrice: finalTotalPrice,
-          note: note || null,
-          order_status: order_status || 'pending',
-        },
-        (err, result) => {
-          if (err) return reject(err);
-          resolve(result);
-        }
-      );
+    // 💾 Simpan ke DB
+    const result = await Order.create({
+      userId,
+      customer_name,
+      items: detailedItems,
+      totalPrice: finalTotalPrice,
+      note: note || null,
+      order_status: order_status || 'pending',
     });
 
     res.status(201).json({
       message: '✅ Pesanan berhasil dibuat',
       data: {
+        orderId: result.insertId,
         userId,
         customer_name,
         items: detailedItems,
@@ -75,65 +69,133 @@ exports.createOrder = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error('❌ createOrder error:', error);
     next(error);
   }
 };
 
-// 🔵 Ambil semua pesanan
-exports.getOrders = (req, res, next) => {
-  Order.findAll((err, results) => {
-    if (err) return next(err);
+// ===============================
+// 🔵 Ambil semua pesanan (Admin)
+// ===============================
+exports.getOrders = async (req, res, next) => {
+  try {
+    const results = await Order.findAll();
+    const formatted = results.map(o => ({
+      ...o,
+      items: JSON.parse(o.items || '[]'),
+    }));
+
     res.status(200).json({
       message: '📦 Daftar pesanan berhasil diambil',
-      data: results,
+      data: formatted,
     });
-  });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// 🟣 Ambil satu pesanan berdasarkan ID
-exports.getOrderById = (req, res, next) => {
-  const id = req.params.id;
-  Order.findById(id, (err, results) => {
-    if (err) return next(err);
-    if (results.length === 0)
-      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+// ===============================
+// 🟣 Ambil pesanan berdasarkan ID
+// ===============================
+exports.getOrderById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id);
+
+    if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
+    order.items = JSON.parse(order.items || '[]');
 
     res.status(200).json({
       message: '📄 Detail pesanan berhasil diambil',
-      data: results[0],
+      data: order,
     });
-  });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// 🟠 Ubah status pesanan
-exports.updateOrderStatus = (req, res, next) => {
-  const id = req.params.id;
-  const { order_status } = req.body;
+// ===============================
+// 🧾 Ambil invoice (order + payment)
+// ===============================
+exports.getInvoiceByOrderId = async (req, res, next) => {
+  try {
+    const { id } = req.params;
 
-  if (!order_status)
-    return res.status(400).json({ message: 'Status baru harus diisi' });
+    const order = await Order.findById(id);
+    if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
 
-  Order.updateStatus(id, order_status, (err, result) => {
-    if (err) return next(err);
-    if (result.affectedRows === 0)
-      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    order.items = JSON.parse(order.items || '[]');
+    const payment = await Payment.findByOrderId(id);
 
     res.status(200).json({
-      message: `🟢 Status pesanan dengan ID ${id} berhasil diubah menjadi "${order_status}"`,
+      message: '🧾 Invoice berhasil diambil',
+      data: {
+        order,
+        payment: payment || { message: 'Belum ada pembayaran untuk pesanan ini' },
+      },
     });
-  });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// 🔴 Hapus pesanan
-exports.deleteOrder = (req, res, next) => {
-  const id = req.params.id;
+// ===============================
+// 🟢 Ambil pesanan berdasarkan userId
+// ===============================
+exports.getOrdersByUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) throw new HttpError('User ID wajib diisi', 400);
 
-  Order.delete(id, (err, result) => {
-    if (err) return next(err);
-    if (result.affectedRows === 0)
-      return res.status(404).json({ message: '❌ Pesanan tidak ditemukan' });
+    const results = await Order.findByUserId(userId);
+    if (results.length === 0) throw new HttpError('Belum ada riwayat pesanan', 404);
+
+    const formatted = results.map(o => ({
+      ...o,
+      items: JSON.parse(o.items || '[]'),
+    }));
+
+    res.status(200).json({
+      message: '📜 Riwayat pesanan berhasil diambil',
+      data: formatted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===============================
+// 🟠 Ubah status pesanan
+// ===============================
+exports.updateOrderStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { order_status } = req.body;
+
+    if (!order_status) throw new HttpError('Status baru harus diisi', 400);
+
+    const result = await Order.updateStatus(id, order_status);
+    if (result.affectedRows === 0) throw new HttpError('Pesanan tidak ditemukan', 404);
+
+    res.status(200).json({
+      message: `🟢 Status pesanan dengan ID ${id} diubah menjadi "${order_status}"`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===============================
+// 🔴 Hapus pesanan
+// ===============================
+exports.deleteOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await Order.delete(id);
+
+    if (result.affectedRows === 0) throw new HttpError('Pesanan tidak ditemukan', 404);
 
     res.status(200).json({ message: '🗑️ Pesanan berhasil dihapus' });
-  });
+  } catch (error) {
+    next(error);
+  }
 };

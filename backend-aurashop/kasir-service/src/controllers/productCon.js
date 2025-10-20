@@ -1,12 +1,19 @@
-const Product = require("../models/productmodel");
+const inventoryService = require('../services/iventoryserv');
 
+exports.getAllProducts = async (req, res) => {
+  try {
+    const products = await inventoryService.fetchAllProducts();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal konek ke inventory-service' });
+  }
+};
 
-exports.getAllProducts = (req, res) => {
-  Product.getAll((err, results) => {
-    if (err) {
-      console.error("Error:", err);
-      return res.status(500).json({ message: "Gagal mengambil data produk" });
-    }
-    res.json(results);
-  });
+exports.getProductById = async (req, res) => {
+  try {
+    const product = await inventoryService.fetchProductById(req.params.id);
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal ambil produk berdasarkan ID' });
+  }
 };

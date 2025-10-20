@@ -4,7 +4,7 @@ const db = mysql.createConnection({
   host: "localhost",
   user: "root",
   password: "",
-  database: "kasir_db",
+  database: "aurashop_inventory",
 });
 
 db.connect((err) => {
