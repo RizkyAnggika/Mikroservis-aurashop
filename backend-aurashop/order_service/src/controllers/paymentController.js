@@ -67,3 +67,24 @@ exports.createPayment = async (req, res, next) => {
     next(error);
   }
 };
+
+// 🧾 Ambil semua pembayaran berdasarkan orderId
+exports.getPaymentsByOrder = async (req, res, next) => {
+  try {
+    const { id: orderId } = req.params;
+
+    // Cek apakah order ada
+    const order = await Order.findById(orderId);
+    if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
+
+    // Ambil data pembayaran
+    const payments = await Payment.findByOrderId(orderId);
+
+    res.status(200).json({
+      message: 'Riwayat pembayaran ditemukan',
+      data: payments,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

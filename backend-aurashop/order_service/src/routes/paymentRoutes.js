@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createPayment, getPaymentsByOrder } = require('../controllers/paymentController');
-const validateId = require('../middlewares/validateId'); // optional middleware untuk validasi
+const validateId = require('../middleware/validateId'); // optional middleware untuk validasi
 
 /**
  * @route POST /api/orders/:id/pay
