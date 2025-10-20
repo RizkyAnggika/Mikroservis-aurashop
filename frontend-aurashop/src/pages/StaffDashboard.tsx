@@ -265,15 +265,36 @@ export default function OrdersPage() {
 
             <div className="mt-2 text-sm">
               {Array.isArray(o.items) && o.items.length > 0 ? (
-                o.items.slice(0, 3).map((it, i) => (
-                  <span key={i} className="mr-2">
-                    {(it.tea?.name || it.nama_produk || "Produk tidak diketahui")} ×{" "}
-                    {(it.quantity || it.qty || 0)}
-                  </span>
-                ))
-              ) : (
-                <span className="text-gray-500 italic">Tidak ada item</span>
-              )}
+  o.items.slice(0, 3).map((it, i) => (
+    <span key={i} className="mr-2 flex items-center gap-2">
+      <span>
+        {(it.tea?.name || it.nama_produk || "Produk tidak diketahui")} ×{" "}
+        {(it.quantity || it.qty || 0)}
+      </span>
+      <Button
+        size="icon"
+        variant="outline"
+        className="h-6 w-6"
+        onClick={() => handleAdd({
+  id: it.productId || it.tea?.id || "",
+  name: it.nama_produk || it.tea?.name || "Produk tidak diketahui",
+  description: it.tea?.description || "",
+  price: it.harga || it.tea?.price || 0,
+  stock: it.tea?.stock || 99,
+  isAvailable: true,
+  image: it.tea?.image || "/placeholder.png", // ✅ default gambar
+  category: it.tea?.category || "black", // ✅ default kategori
+})}
+
+      >
+        +
+      </Button>
+    </span>
+  ))
+) : (
+  <span className="text-gray-500 italic">Tidak ada item</span>
+)}
+
               {o.items.length > 3 && <span>…</span>}
             </div>
           </div>

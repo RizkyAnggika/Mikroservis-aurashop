@@ -91,7 +91,7 @@ export default function Shop() {
       const req = {
         items: cartItems,
         customerName: payload.customerName.trim(),
-        notes: payload.notes?.trim() || undefined,
+        note: payload.notes?.trim() || undefined,
         clientId: getClientId(),
         source: "shop" as const,
       };
@@ -99,16 +99,17 @@ export default function Shop() {
       await api.createOrder(req);
 
       const newOrder: Order = {
-        id: crypto.randomUUID?.() ?? String(Date.now()),
-        items: cartItems,
-        total: payload.total,
-        status: "pending",
-        customerName: req.customerName,
-        orderDate: new Date(),
-        notes: req.notes,
-        clientId: req.clientId,
-        source: req.source,
-      };
+  id: crypto.randomUUID?.() ?? String(Date.now()),
+  items: cartItems,
+  totalPrice: payload.total,      // ✅ ganti dari total
+  order_status: "pending",        // ✅ ganti dari status
+  customer_name: req.customerName, // ✅ ganti dari customerName
+  orderDate: new Date(),
+  note: req.note,
+  clientId: req.clientId,
+  source: req.source,
+};
+
       setSessionOrders(prev => [...prev, newOrder]);
 
       toast.success("Pesanan berhasil dibuat!");

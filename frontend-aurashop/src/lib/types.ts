@@ -10,17 +10,14 @@ export interface Tea {
 }
 
 export interface CartItem {
-  tea?: {
-    id: string;
-    name: string;
-    price: number;
-  };
+  tea?: Tea;
   productId?: string;
   nama_produk?: string;
   harga?: number;
   quantity: number;
   qty?: number;
 }
+
 
 export interface Order {
   id: string | number;
@@ -33,6 +30,7 @@ export interface Order {
   note?: string | null;
   order_status: string;
   status?: string; // ✅ alias frontend
+  clientId?: string; // ✅ tambahkan ini
   source?: "shop" | "pos";
   createdAt?: string;
   orderDate?: Date | string; // ✅ untuk tampilan frontend

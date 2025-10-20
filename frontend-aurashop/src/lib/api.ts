@@ -6,27 +6,36 @@ import { Tea, Order, CartItem } from "@/lib/types";
 const API_URL = "http://localhost:4001/api/inventory";
 const ORDER_API = "http://localhost:5001/api/orders";
 
+interface BackendTea {
+  id: number;
+  nama_produk: string;
+  kategori: string;
+  harga: number;
+  stok: number;
+  deskripsi: string;
+  gambar: string;
+}
+
+
 export const api = {
   // ========================== //
   // 🟢 PRODUK (INVENTORY)
   // ========================== //
-  async getTeas(): Promise<Tea[]> {
-    const res = await axios.get(API_URL);
+ async getTeas(): Promise<Tea[]> {
+  const res = await axios.get<BackendTea[]>(API_URL);
 
-    console.log("📦 Data produk dari backend:", res.data); // Debug log
+  return res.data.map((item) => ({
+    id: String(item.id), // 🔄 ubah number → string sesuai interface Tea
+    name: item.nama_produk,
+    description: item.deskripsi,
+    price: item.harga,
+    image: item.gambar,
+    category: item.kategori as Tea["category"], // ✅ cast ke union type
+    stock: item.stok,
+    isAvailable: item.stok > 0,
+  }));
+},
 
-    // ⚙️ Sesuaikan struktur data dari backend MySQL kamu
-    return res.data.map((item: any) => ({
-      id: item.id,
-      name: item.nama_produk,
-      description: item.deskripsi,
-      price: item.harga,
-      image: item.gambar,
-      category: item.kategori,
-      stock: item.stok,
-      isAvailable: item.stok > 0,
-    }));
-  },
 
   async addTea(tea: Omit<Tea, "id">): Promise<Tea> {
     const res = await axios.post(API_URL, {
