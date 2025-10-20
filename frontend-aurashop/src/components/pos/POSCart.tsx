@@ -4,7 +4,6 @@ import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Trash2, Minus, Plus } from "lucide-react"
 import { CartItem } from "@/lib/types"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 type Props = {
   cartItems: CartItem[]
@@ -54,14 +53,26 @@ export default function POSCart({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => onUpdateQuantity(item.tea.id, Math.max(1, item.quantity - 1))}>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={() => onUpdateQuantity(item.tea.id, Math.max(1, item.quantity - 1))}
+                    >
                       <Minus className="w-4 h-4" />
                     </Button>
                     <div className="w-8 text-center">{item.quantity}</div>
-                    <Button variant="outline" size="icon" onClick={() => onUpdateQuantity(item.tea.id, item.quantity + 1)}>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={() => onUpdateQuantity(item.tea.id, item.quantity + 1)}
+                    >
                       <Plus className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onRemoveItem(item.tea.id)}>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => onRemoveItem(item.tea.id)}
+                    >
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
                   </div>
@@ -115,19 +126,6 @@ export default function POSCart({
             </Button>
           </div>
         </div>
-      </div>
-
-      {/* Riwayat Order (pakai komponen lama via slot) */}
-      <div className="mt-4">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full">Lihat Riwayat Order</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader><DialogTitle>Riwayat Order</DialogTitle></DialogHeader>
-            <div id="order-history-slot" />
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )
