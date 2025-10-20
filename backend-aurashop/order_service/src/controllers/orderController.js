@@ -11,9 +11,10 @@ exports.createOrder = async (req, res, next) => {
   try {
     const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
 
-    if (!userId || !customer_name || !Array.isArray(items) || items.length === 0) {
-      throw new HttpError('Data pesanan tidak lengkap atau format items salah', 400);
-    }
+    // Ganti jadi
+if (!customer_name || !Array.isArray(items) || items.length === 0) {
+  throw new HttpError('Data pesanan tidak lengkap atau format items salah', 400);
+}
 
     let calculatedTotalPrice = 0;
     const detailedItems = [];

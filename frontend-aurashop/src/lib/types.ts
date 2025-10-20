@@ -10,21 +10,32 @@ export interface Tea {
 }
 
 export interface CartItem {
-  tea: Tea;
+  tea?: {
+    id: string;
+    name: string;
+    price: number;
+  };
+  productId?: string;
+  nama_produk?: string;
+  harga?: number;
   quantity: number;
+  qty?: number;
 }
 
 export interface Order {
-  id: string;
+  id: string | number;
+  userId?: string;
+  customer_name: string;
+  customerName?: string; // alias frontend
   items: CartItem[];
-  total: number;
-  status: 'pending' | 'preparing' | 'ready' | 'completed';
-  customerName: string;
-  orderDate: Date;
-  notes?: string;
-
-  clientId?: string;       
-  source?: 'shop' | 'pos'; 
+  totalPrice: number;
+  total?: number; // ✅ alias untuk total
+  note?: string | null;
+  order_status: string;
+  status?: string; // ✅ alias frontend
+  source?: "shop" | "pos";
+  createdAt?: string;
+  orderDate?: Date | string; // ✅ untuk tampilan frontend
 }
 
 

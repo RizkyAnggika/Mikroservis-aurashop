@@ -76,15 +76,17 @@ export const api = {
       (payload.extra ?? 0);
 
     const orderData = {
-      userId: payload.clientId || null,
-      customer_name: payload.customerName || `User ${payload.clientId}`,
-      items: payload.items.map((it) => ({
-        productId: it.tea.id,
-        qty: it.quantity, // ✅ sesuai backend order kamu
-      })),
-      totalPrice: total,
-      note: payload.notes || null,
-    };
+  userId: payload.clientId || 999, // ← kasih ID dummy untuk POS
+  customer_name: payload.customerName || `Walk-in`,
+  items: payload.items.map((it) => ({
+    productId: it.tea.id,
+    qty: it.quantity,
+  })),
+  totalPrice: total,
+  note: payload.notes || null,
+  order_status: "pending",
+};
+
 
     const res = await axios.post(ORDER_API, orderData);
     return res.data;
@@ -99,3 +101,5 @@ export const api = {
     await axios.put(`${ORDER_API}/${orderId}/status`, { order_status: status });
   },
 };
+
+
