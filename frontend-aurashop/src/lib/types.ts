@@ -22,7 +22,12 @@ export interface Order {
   customerName: string;
   orderDate: Date;
   notes?: string;
+
+  clientId?: string;       
+  source?: 'shop' | 'pos'; 
 }
+
+
 
 export interface User {
   id: string;

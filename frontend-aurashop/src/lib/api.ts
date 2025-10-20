@@ -1,9 +1,9 @@
-import { Tea, Order, CartItem } from '@/lib/types';
-import { mockTeas } from '@/data/mockData';
-import { generateId } from '@/lib/utils';
+import { Tea, Order, CartItem } from "@/lib/types";
+import { mockTeas } from "@/data/mockData";
+import { generateId } from "@/lib/utils";
 
-const TEAS_STORAGE_KEY = 'teashop_teas';
-const ORDERS_STORAGE_KEY = 'teashop_orders';
+const TEAS_KEY = "teashop_teas";
+const ORDERS_KEY = "teashop_orders";
 
 export class TeaShopAPI {
   private static instance: TeaShopAPI;
@@ -11,132 +11,136 @@ export class TeaShopAPI {
   private orders: Order[] = [];
 
   static getInstance(): TeaShopAPI {
-    if (!TeaShopAPI.instance) {
-      TeaShopAPI.instance = new TeaShopAPI();
-    }
+    if (!TeaShopAPI.instance) TeaShopAPI.instance = new TeaShopAPI();
     return TeaShopAPI.instance;
   }
 
   constructor() {
-    this.loadData();
+    this.load();
   }
 
-  private loadData(): void {
-    try {
-      const storedTeas = localStorage.getItem(TEAS_STORAGE_KEY);
-      const storedOrders = localStorage.getItem(ORDERS_STORAGE_KEY);
-      
-      this.teas = storedTeas ? JSON.parse(storedTeas) : [...mockTeas];
-      this.orders = storedOrders ? JSON.parse(storedOrders) : [];
-      
-      this.saveData();
-    } catch (error) {
-      console.error('Error loading data:', error);
-      this.teas = [...mockTeas];
-      this.orders = [];
-    }
+  // ---------- STORAGE ----------
+  private load() {
+    const t = localStorage.getItem(TEAS_KEY);
+    const o = localStorage.getItem(ORDERS_KEY);
+
+    this.teas = t ? JSON.parse(t) : [...mockTeas];
+
+    const parsed: Order[] = o ? JSON.parse(o) : [];
+    this.orders = parsed.map((x) => ({ ...x, orderDate: new Date(x.orderDate) }));
+
+    this.save();
   }
 
-  private saveData(): void {
-    try {
-      localStorage.setItem(TEAS_STORAGE_KEY, JSON.stringify(this.teas));
-      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(this.orders));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
+  private save() {
+    localStorage.setItem(TEAS_KEY, JSON.stringify(this.teas));
+    localStorage.setItem(
+      ORDERS_KEY,
+      JSON.stringify(this.orders.map((x) => ({ ...x, orderDate: x.orderDate })))
+    );
   }
 
-  // Tea Management
+  // ==============================
+  // TEA (CRUD PRODUK)
+  // ==============================
+
   async getTeas(): Promise<Tea[]> {
     return [...this.teas];
   }
 
-  async getTeaById(id: string): Promise<Tea | null> {
-    return this.teas.find(tea => tea.id === id) || null;
-  }
-
-  async addTea(tea: Omit<Tea, 'id'>): Promise<Tea> {
-    const newTea: Tea = {
-      ...tea,
-      id: generateId(),
-    };
+  async addTea(tea: Omit<Tea, "id">): Promise<Tea> {
+    const newTea: Tea = { ...tea, id: generateId() };
     this.teas.push(newTea);
-    this.saveData();
+    this.save();
     return newTea;
   }
 
   async updateTea(id: string, updates: Partial<Tea>): Promise<Tea | null> {
-    const index = this.teas.findIndex(tea => tea.id === id);
-    if (index === -1) return null;
-
-    this.teas[index] = { ...this.teas[index], ...updates };
-    this.saveData();
-    return this.teas[index];
+    const idx = this.teas.findIndex((t) => t.id === id);
+    if (idx === -1) return null;
+    this.teas[idx] = { ...this.teas[idx], ...updates };
+    this.save();
+    return this.teas[idx];
   }
 
   async deleteTea(id: string): Promise<boolean> {
-    const index = this.teas.findIndex(tea => tea.id === id);
-    if (index === -1) return false;
-
-    this.teas.splice(index, 1);
-    this.saveData();
+    const idx = this.teas.findIndex((t) => t.id === id);
+    if (idx === -1) return false;
+    this.teas.splice(idx, 1);
+    this.save();
     return true;
   }
 
-  // Order Management
-  async createOrder(items: CartItem[], customerName: string, notes?: string): Promise<Order> {
-    const total = items.reduce((sum, item) => sum + (item.tea.price * item.quantity), 0);
-    
-    const order: Order = {
-      id: generateId(),
-      items,
-      total,
-      status: 'pending',
-      customerName,
-      orderDate: new Date(),
-      notes,
-    };
-
-    // Update stock
-    for (const item of items) {
-      await this.updateTeaStock(item.tea.id, -item.quantity);
-    }
-
-    this.orders.push(order);
-    this.saveData();
-    return order;
-  }
-
-  async getOrders(): Promise<Order[]> {
-    return [...this.orders].sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-  }
-
-  async updateOrderStatus(orderId: string, status: Order['status']): Promise<Order | null> {
-    const index = this.orders.findIndex(order => order.id === orderId);
-    if (index === -1) return null;
-
-    this.orders[index].status = status;
-    this.saveData();
-    return this.orders[index];
-  }
-
-  async updateTeaStock(teaId: string, stockChange: number): Promise<boolean> {
-    const tea = this.teas.find(t => t.id === teaId);
-    if (!tea) return false;
-
-    tea.stock = Math.max(0, tea.stock + stockChange);
-    tea.isAvailable = tea.stock > 0;
-    this.saveData();
+  async updateTeaStock(teaId: string, diff: number) {
+    const t = this.teas.find((x) => x.id === teaId);
+    if (!t) return false;
+    t.stock = Math.max(0, t.stock + diff);
+    t.isAvailable = t.stock > 0;
+    this.save();
     return true;
   }
 
-  // Inventory helpers
-  async getLowStockTeas(threshold: number = 10): Promise<Tea[]> {
-    return this.teas.filter(tea => tea.stock <= threshold);
+  async getLowStockTeas(threshold = 10): Promise<Tea[]> {
+    return this.teas.filter((t) => t.stock <= threshold);
   }
 
   async getTotalInventoryValue(): Promise<number> {
-    return this.teas.reduce((total, tea) => total + (tea.price * tea.stock), 0);
+    return this.teas.reduce((acc, t) => acc + t.price * t.stock, 0);
+  }
+
+  // ==============================
+  // ORDERS (TERPUSAT)
+  // ==============================
+
+  async createOrder(payload: {
+  items: CartItem[];
+  customerName: string;
+  notes?: string;
+  clientId?: string;
+  source?: "shop" | "pos";
+  extra?: number;
+}): Promise<Order> {
+  const extra = payload.extra ?? 0;
+  const total = payload.items.reduce(
+    (s, it) => s + it.tea.price * it.quantity,
+    0
+  ) + extra;
+
+  const order: Order = {
+    id: generateId(),
+    items: payload.items,
+    total,
+    status: "pending",
+    customerName: payload.customerName,
+    orderDate: new Date(),
+    notes: payload.notes,
+    clientId: payload.clientId ?? "anonymous",
+    source: payload.source ?? "shop",
+  };
+
+  for (const it of payload.items) {
+    await this.updateTeaStock(it.tea.id, -it.quantity);
+  }
+
+  this.orders.unshift(order);
+  this.save();
+  return order;
+}
+
+
+  async getOrders(filter?: { clientId?: string }): Promise<Order[]> {
+    const list = filter?.clientId
+      ? this.orders.filter((o) => (o as any).clientId === filter.clientId)
+      : this.orders;
+    return [...list].sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime());
+  }
+
+  async updateOrderStatus(orderId: string, status: Order["status"]) {
+    const idx = this.orders.findIndex((o) => o.id === orderId);
+    if (idx === -1) return null;
+    this.orders[idx].status = status;
+    this.save();
+    return this.orders[idx];
   }
 }
 
