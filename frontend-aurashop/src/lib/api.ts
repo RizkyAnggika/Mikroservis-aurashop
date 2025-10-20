@@ -77,7 +77,7 @@ export const api = {
 
     const orderData = {
       userId: payload.clientId || null,
-      customer_name: payload.customerName,
+      customer_name: payload.customerName || `User ${payload.clientId}`,
       items: payload.items.map((it) => ({
         productId: it.tea.id,
         qty: it.quantity, // ✅ sesuai backend order kamu
