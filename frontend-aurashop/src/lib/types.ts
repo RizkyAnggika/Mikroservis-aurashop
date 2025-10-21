@@ -20,7 +20,7 @@ export interface CartItem {
 
 
 export interface Order {
-  id: string | number;
+  id: string;
   userId?: string;
   customer_name: string;
   customerName?: string; // alias frontend
@@ -35,7 +35,6 @@ export interface Order {
   createdAt?: string;
   orderDate?: Date | string; // ✅ untuk tampilan frontend
 }
-
 
 
 export interface User {

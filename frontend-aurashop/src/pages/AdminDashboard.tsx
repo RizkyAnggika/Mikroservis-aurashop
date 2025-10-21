@@ -1,5 +1,4 @@
 import { Crown } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import InventoryManager from "@/components/InventoryManager"
 import { toast } from "sonner"
 

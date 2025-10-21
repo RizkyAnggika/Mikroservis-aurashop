@@ -51,7 +51,12 @@ export default function OrderCart({
     const item = cartItems.find(i => i.tea.id === teaId);
     if (!item) return;
     const q = Math.max(0, item.quantity + d);
-    q === 0 ? onRemoveItem(teaId) : onUpdateQuantity(teaId, q);
+   if (q === 0) {
+  onRemoveItem(teaId);
+} else {
+  onUpdateQuantity(teaId, q);
+}
+
   };
 
   const submit = async () => {
