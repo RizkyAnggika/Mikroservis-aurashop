@@ -1,13 +1,10 @@
-// 📁 src/lib/api.ts
-import axios from "axios";
-import { Tea, Order, CartItem } from "@/lib/types";
+import axios, { AxiosError } from "axios";
+import { Tea, Order, CartItem, OrderStatus } from "@/lib/types";
 
-// ========================== //
-// 🔗 KONFIGURASI ENDPOINT
-// ========================== //
-const API_URL = "http://localhost:4001/api/inventory"; // Service Inventory
-const ORDER_API = "http://localhost:5001/api/orders"; // Service Order
-const PAYMENT_API = "http://localhost:4002/api/orders"; // Service Payment
+const API_URL = "http://localhost:4001/api/inventory";
+const ORDER_API = "http://localhost:5001/api/orders";
+const PAYMENT_API = "http://localhost:4002/api/orders";
+// const UPLOAD_API = "http://localhost:4001/api/inventory/upload";
 
 // ========================== //
 // 🟢 TIPE DATA BACKEND
@@ -39,15 +36,41 @@ interface BackendOrder {
   createdAt?: string;
 }
 
-type CreateOrderResponse = {
-  message?: string;
-  data?: {
-    id?: number | string;
-    orderId?: number | string;
-    [k: string]: any;
-  };
-  [k: string]: any;
+type UnknownRecord = Record<string, unknown>;
+const isObject = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
+
+// ========================== //
+// 🔹 STATUS NORMALIZER
+// ========================== //
+const ORDER_STATUS_MAP: Record<string, OrderStatus> = {
+  // FE status yang diizinkan
+  pending: "pending",
+  paid: "paid",
+
+  // alias backend → dipetakan agar valid
+  processing: "pending",
+  process: "pending",
+  unpaid: "pending",
+  waiting: "pending",
+  completed: "paid",
+  success: "paid",
+  payed: "paid",
+  payment_success: "paid",
 };
+
+function normalizeOrderStatus(
+  input: unknown,
+  fallback: OrderStatus = "pending"
+): OrderStatus {
+  if (typeof input !== "string") return fallback;
+  const key = input.trim().toLowerCase();
+  return ORDER_STATUS_MAP[key] ?? fallback;
+}
+
+export type CreateOrderResponse = {
+  message?: string;
+  data?: Record<string, unknown>;
+} & Record<string, unknown>;
 
 
 // ========================== //
@@ -55,6 +78,7 @@ type CreateOrderResponse = {
 // ========================== //
 export const api = {
   updateOrder,
+
   // -------------------------- //
   // 🟢 PRODUK (INVENTORY)
   // -------------------------- //
@@ -77,11 +101,11 @@ export const api = {
       nama_produk: tea.name,
       deskripsi: tea.description,
       harga: tea.price,
-      gambar: tea.image,
+      gambar: null,
       kategori: tea.category,
       stok: tea.stock,
     });
-    return { ...tea, id: res.data.id };
+    return { ...tea, id: String((res.data as UnknownRecord).id ?? "") };
   },
 
   async updateTea(id: string, updates: Partial<Tea>): Promise<void> {
@@ -95,6 +119,13 @@ export const api = {
     });
   },
 
+  async uploadImage(productId: string | number, file: File): Promise<{ url: string }> {
+    const fd = new FormData();
+    fd.append("image", file); // <-- harus 'image' sesuai multer.single('image')
+    await axios.post(`${API_URL}/${productId}/image`, fd); // ❗️benar: /:id/image
+    return { url: `${API_URL}/${productId}/image` };
+  },
+
   async deleteTea(id: string): Promise<void> {
     await axios.delete(`${API_URL}/${id}`);
   },
@@ -106,14 +137,14 @@ export const api = {
   // -------------------------- //
   // 🟡 PESANAN (ORDER)
   // -------------------------- //
-    async createOrder(payload: {
+  async createOrder(payload: {
     items: CartItem[];
     customerName: string;
     notes?: string;
     clientId?: string;
     source?: "shop" | "pos";
     extra?: number;
-  }): Promise<CreateOrderResponse> {          // ⬅️ ubah tipe return di sini
+  }): Promise<CreateOrderResponse> {
     const total =
       payload.items.reduce((s, it) => s + it.tea.price * it.quantity, 0) +
       (payload.extra ?? 0);
@@ -131,30 +162,37 @@ export const api = {
     };
 
     const res = await axios.post(ORDER_API, orderData);
-    return res.data; // biasanya { message, data: {...} }
+    return res.data as CreateOrderResponse;
   },
 
-  // helper opsional (biar rapi): ambil id dari response mana pun
-  getOrderIdFromCreate(res: CreateOrderResponse | any): string | number | undefined {
-    return res?.data?.orderId ?? res?.data?.id ?? res?.orderId ?? res?.id;
+  getOrderIdFromCreate(res: CreateOrderResponse | unknown): string | number | undefined {
+    if (!isObject(res)) return undefined;
+    const data = isObject(res.data) ? res.data : undefined;
+    return (
+      (data?.orderId as string | number | undefined) ??
+      (data?.id as string | number | undefined) ??
+      (res.orderId as string | number | undefined) ??
+      (res.id as string | number | undefined)
+    );
   },
 
   async getOrders(): Promise<Order[]> {
     const res = await axios.get(ORDER_API);
-    const raw = res.data;
+    const raw = res.data as unknown;
 
-    const data: BackendOrder[] = Array.isArray(raw)
-      ? raw
-      : Array.isArray(raw.data)
-      ? raw.data
-      : Array.isArray(raw.orders)
-      ? raw.orders
-      : [];
+    let data: BackendOrder[] = [];
+    if (Array.isArray(raw)) data = raw as BackendOrder[];
+    else if (isObject(raw) && Array.isArray(raw.data)) data = raw.data as BackendOrder[];
+    else if (isObject(raw) && Array.isArray(raw.orders)) data = raw.orders as BackendOrder[];
 
-    return data.map((order) => ({
-      id: String(order.id),
-      customer_name: order.customer_name || "Tanpa Nama",
-      items: order.items.map((it): CartItem => ({
+    return data.map((order) => {
+  const status = normalizeOrderStatus(order.order_status, "pending"); // ✅ normalisasi dulu
+
+  return {
+    id: String(order.id),
+    customer_name: order.customer_name || "Tanpa Nama",
+    items: order.items.map(
+      (it): CartItem => ({
         tea: {
           id: String(it.productId),
           name: it.nama_produk,
@@ -169,14 +207,19 @@ export const api = {
         nama_produk: it.nama_produk,
         harga: it.harga,
         quantity: it.quantity,
-      })),
-      totalPrice: order.totalPrice,
-      order_status: order.order_status,
-      notes: (order as any).notes ?? (order as any).note ?? null,
-      status: order.order_status,
-      orderDate: (order as any).createdAt || (order as any).created_at || new Date().toISOString(),
-      source: "pos",
-    }));
+      })
+    ),
+    totalPrice: order.totalPrice,
+
+    // ⬇️ gunakan hasil normalisasi (OrderStatus), bukan string backend mentah
+    order_status: status,
+    status, // (opsional) kalau interface Order kamu juga punya properti 'status'
+
+    notes: order.notes ?? null,
+    orderDate: order.createdAt ?? new Date().toISOString(),
+    source: "pos",
+  } as Order; // opsional kalau TS masih rewel
+});
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<void> {
@@ -186,27 +229,36 @@ export const api = {
   // -------------------------- //
   // 💳 PEMBAYARAN (PAYMENT)
   // -------------------------- //
-  async createPayment(orderId: number | string, payload: { paymentMethod: string; amount: number }) {
+  async createPayment(
+    orderId: number | string,
+    payload: { paymentMethod: string; amount: number }
+  ): Promise<unknown> {
     try {
       const res = await axios.post(`${PAYMENT_API}/${orderId}/pay`, payload);
       return res.data;
-    } catch (err: any) {
-      console.error("❌ Gagal membuat pembayaran:", err?.response?.data || err.message);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        console.error("❌ Gagal membuat pembayaran:", err.response?.data);
+      } else {
+        console.error("❌ Gagal membuat pembayaran:", err);
+      }
       throw err;
     }
   },
 
-  async getPayments(orderId: number | string) {
+  async getPayments(orderId: number | string): Promise<unknown> {
     const res = await axios.get(`${PAYMENT_API}/${orderId}/payments`);
     return res.data;
   },
 };
 
-// ⬇️ Tambahkan di atas export const api (bersama helper lain kalau mau dibuat terpisah)
+// ========================== //
+// 🔧 HELPER & UPDATE ORDER
+// ========================== //
 function mapItemsForBackend(items: CartItem[]) {
   return items.map((it) => ({
     productId: it.tea?.id ?? it.productId,
-    qty: it.quantity ?? it.qty ?? 1,
+    qty: it.quantity ?? 1,
   }));
 }
 
@@ -218,8 +270,8 @@ async function updateOrder(
     notes?: string | null;
     extra?: number;
   }
-) {
-  const body: any = {
+): Promise<unknown> {
+  const body: Record<string, unknown> = {
     customer_name: payload.customerName,
     notes: payload.notes ?? null,
   };
@@ -231,31 +283,39 @@ async function updateOrder(
       (payload.extra ?? 0);
   }
 
-  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  Object.keys(body).forEach((k) => {
+    if (body[k] === undefined) delete body[k];
+  });
 
-  const attempts: Array<{ method: "put" | "patch"; url: string }> = [
-    { method: "put",   url: `${ORDER_API}/${orderId}` },
+  const attempts = [
+    { method: "put", url: `${ORDER_API}/${orderId}` },
     { method: "patch", url: `${ORDER_API}/${orderId}` },
-    { method: "put",   url: `${ORDER_API}/update/${orderId}` },
+    { method: "put", url: `${ORDER_API}/update/${orderId}` },
     { method: "patch", url: `${ORDER_API}/update/${orderId}` },
     { method: "patch", url: `${ORDER_API}/${orderId}/update` },
-  ];
+  ] as const;
 
-  let lastErr: any = null;
+  let lastErr: AxiosError | Error | undefined;
+
   for (const a of attempts) {
     try {
       const res =
-        a.method === "put" ? await axios.put(a.url, body) : await axios.patch(a.url, body);
+        a.method === "put"
+          ? await axios.put(a.url, body)
+          : await axios.patch(a.url, body);
       return res.data;
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 404) {
-        console.warn(`[updateOrder] ${a.method.toUpperCase()} ${a.url} → 404, coba endpoint lain…`);
-        lastErr = err;
-        continue; // coba kombinasi berikutnya
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        if (status === 404) {
+          console.warn(`[updateOrder] ${a.method.toUpperCase()} ${a.url} → 404, coba endpoint lain…`);
+          lastErr = err;
+          continue;
+        }
       }
-      throw err; // error lain: hentikan
+      throw err;
     }
   }
+
   throw lastErr ?? new Error("Tidak ada endpoint update order yang cocok.");
 }

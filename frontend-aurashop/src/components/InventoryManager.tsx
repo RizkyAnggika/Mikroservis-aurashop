@@ -15,6 +15,8 @@ import { Package, Plus, Edit, Trash2, AlertTriangle, TrendingUp, DollarSign } fr
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
+const API_URL = "http://localhost:4001/api/inventory";
+
 interface InventoryManagerProps {
   onTeaUpdated?: () => void;
 }
@@ -24,6 +26,10 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTea, setEditingTea] = useState<Tea | null>(null);
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>("");
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -61,6 +67,8 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
       isAvailable: true,
     });
     setEditingTea(null);
+    setImageFile(null);
+    setPreview("");
   };
 
   const handleOpenDialog = (tea?: Tea) => {
@@ -75,6 +83,8 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
         stock: tea.stock.toString(),
         isAvailable: tea.isAvailable,
       });
+      setImageFile(null);
+      setPreview(tea.image || "");
     } else {
       resetForm();
     }
@@ -94,28 +104,48 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
       toast.error('Harga harus berupa angka positif');
       return;
     }
-
     if (isNaN(stock) || stock < 0) {
       toast.error('Stok harus berupa angka non-negatif');
       return;
     }
 
     try {
-      const teaData = {
-        name: formData.name,
-        description: formData.description,
-        price,
-        image: formData.image || 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&h=300&fit=crop',
-        category: formData.category,
-        stock,
-        isAvailable: formData.isAvailable && stock > 0,
-      };
-
       if (editingTea) {
-        await api.updateTea(editingTea.id, teaData);
+        // ===== EDIT PRODUK =====
+        // Upload gambar dulu jika user memilih gambar baru
+        if (imageFile) {
+          await api.uploadImage(editingTea.id, imageFile); // → POST /api/inventory/:id/image
+        }
+
+        await api.updateTea(editingTea.id, {
+          name: formData.name,
+          description: formData.description,
+          price,
+          image: `${API_URL}/${editingTea.id}/image`, // konsisten gunakan endpoint gambar
+          category: formData.category,
+          stock,
+          isAvailable: formData.isAvailable && stock > 0,
+        });
+
         toast.success('Teh berhasil diperbarui');
       } else {
-        await api.addTea(teaData);
+        // ===== TAMBAH PRODUK =====
+        // Buat produk dulu TANPA gambar
+        const created = await api.addTea({
+          name: formData.name,
+          description: formData.description,
+          price,
+          image: '', // gambar akan menyusul
+          category: formData.category,
+          stock,
+          isAvailable: formData.isAvailable && stock > 0,
+        });
+
+        // Kalau ada gambar, upload ke endpoint /:id/image
+        if (imageFile) {
+          await api.uploadImage(created.id, imageFile);
+        }
+
         toast.success('Teh berhasil ditambahkan');
       }
 
@@ -133,7 +163,6 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
     if (!confirm(`Apakah Anda yakin ingin menghapus "${tea.name}"?`)) {
       return;
     }
-
     try {
       await api.deleteTea(tea.id);
       toast.success('Teh berhasil dihapus');
@@ -212,7 +241,7 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
                     placeholder="Masukkan nama teh"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="description">Deskripsi *</Label>
                   <Textarea
@@ -223,7 +252,7 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
                     rows={3}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="price">Harga (IDR) *</Label>
@@ -246,7 +275,7 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="category">Kategori *</Label>
                   <Select value={formData.category} onValueChange={(value: Tea['category']) => setFormData(prev => ({ ...prev, category: value }))}>
@@ -262,15 +291,31 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div>
-                  <Label htmlFor="image">URL Gambar</Label>
+                  <Label htmlFor="image">Upload Gambar</Label>
                   <Input
                     id="image"
-                    value={formData.image}
-                    onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
-                    placeholder="https://example.com/image.jpg"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setImageFile(f);
+                      if (f) {
+                        const url = URL.createObjectURL(f);
+                        setPreview(url);
+                      } else {
+                        setPreview("");
+                      }
+                    }}
                   />
+                  {preview && (
+                    <img
+                      src={preview}
+                      alt="preview"
+                      className="mt-2 w-24 h-24 object-cover rounded"
+                    />
+                  )}
                 </div>
               </div>
             </ScrollArea>
@@ -300,7 +345,7 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Stok</CardTitle>
@@ -313,7 +358,7 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Nilai Inventaris</CardTitle>

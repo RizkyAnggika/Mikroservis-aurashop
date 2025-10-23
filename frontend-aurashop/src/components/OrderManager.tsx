@@ -1,47 +1,65 @@
 // src/pages/orders/OrderManager.tsx
 import { useState, useEffect } from "react";
-import { Order, CartItem, OrderStatus } from "@/lib/types";
+import { Order, CartItem } from "@/lib/types";
 import { formatIDR } from "@/lib/utils";
+
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Receipt, Clock, ChefHat, CheckCircle, Package, DollarSign,
-} from "lucide-react";
+import { Receipt, Clock, DollarSign } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
-// ---------- Types to avoid `any` ----------
+// ---------- Types (tanpa any) ----------
 type LegacyOrderFields = Partial<{
-  total: number;          // beberapa payload pakai "total"
-  created_at: string;     // beberapa payload pakai "created_at"
-  customerName: string;   // alias frontend lama
+  total: number;        // beberapa payload pakai "total"
+  created_at: string;   // beberapa payload pakai "created_at"
+  customerName: string; // alias FE lama
 }>;
+
 type AnyOrder = Order & LegacyOrderFields;
 
-// kalau OrderStatus di types.ts belum ada "paid", kita extend lokal saja
-type ExtStatus = OrderStatus | "paid";
+// Status UI yang dipakai halaman ini: hanya 2
+type UIStatus = "pending" | "paid";
 
-// ---------- Small helpers (tanpa `any`) ----------
+// ---------- Small helpers ----------
 const getIdStr = (o: Pick<Order, "id">) => String(o.id);
 
 const getCustomerName = (o: AnyOrder) =>
   o.customer_name ?? o.customerName ?? "Walk-in";
 
-const getStatus = (o: AnyOrder): ExtStatus =>
-  (o.order_status ?? (o.status as ExtStatus) ?? "pending") as ExtStatus;
+const mapToUIStatus = (o: AnyOrder): UIStatus => {
+  const raw = (o.order_status ?? o.status ?? "pending").toString().toLowerCase();
+  // peta alias BE → UIStatus
+  if (raw === "paid" || raw === "success" || raw === "completed" || raw === "payment_success" || raw === "payed") {
+    return "paid";
+  }
+  return "pending";
+};
 
-const getTotal = (o: AnyOrder) =>
-  Number(o.totalPrice ?? o.total ?? 0);
+const getTotal = (o: AnyOrder) => Number(o.totalPrice ?? o.total ?? 0);
 
 const getOrderDate = (o: AnyOrder) => {
   const raw =
@@ -58,53 +76,19 @@ const itemLabel = (it: CartItem) => {
 };
 
 // ---------- UI helpers ----------
-const getStatusBadgeVariant = (status: ExtStatus) => {
-  switch (status) {
-    case "pending": return "secondary";
-    case "preparing": return "default";
-    case "ready": return "destructive";
-    case "completed": return "outline";
-    case "paid": return "default";
-    default: return "secondary";
-  }
-};
+const getStatusBadgeVariant = (status: UIStatus) =>
+  status === "paid" ? "default" : "secondary";
 
-const getStatusText = (status: ExtStatus) => {
-  switch (status) {
-    case "pending": return "Menunggu";
-    case "preparing": return "Diproses";
-    case "ready": return "Siap";
-    case "completed": return "Selesai";
-    case "paid": return "Terbayar";
-    default: return status;
-  }
-};
+const getStatusText = (status: UIStatus) =>
+  status === "paid" ? "Terbayar" : "Menunggu";
 
-const getStatusIcon = (status: ExtStatus) => {
-  switch (status) {
-    case "pending": return <Clock className="w-4 h-4" />;
-    case "preparing": return <ChefHat className="w-4 h-4" />;
-    case "ready": return <Package className="w-4 h-4" />;
-    case "completed": return <CheckCircle className="w-4 h-4" />;
-    case "paid": return <DollarSign className="w-4 h-4" />;
-    default: return <Clock className="w-4 h-4" />;
-  }
-};
+const getStatusIcon = (status: UIStatus) =>
+  status === "paid" ? <DollarSign className="w-4 h-4" /> : <Clock className="w-4 h-4" />;
 
-const getNextStatus = (status: ExtStatus): ExtStatus | null => {
-  switch (status) {
-    case "pending": return "preparing";
-    case "preparing": return "ready";
-    case "ready": return "completed";
-    default: return null;
-  }
-};
+const getNextStatus = (status: UIStatus): UIStatus | null =>
+  status === "pending" ? "paid" : null;
 
-const getNextStatusText = (status: ExtStatus) => {
-  const next = getNextStatus(status);
-  return next ? getStatusText(next) : "";
-};
-
+// ---------- Component ----------
 interface OrderManagerProps {
   onOrderUpdated?: () => void;
 }
@@ -112,7 +96,7 @@ interface OrderManagerProps {
 export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<ExtStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<UIStatus | "all">("all");
 
   useEffect(() => {
     loadOrders();
@@ -132,10 +116,9 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
     }
   };
 
-  // terima string | number, cast saat ke API
   const handleStatusUpdate = async (
     orderId: string | number,
-    newStatus: ExtStatus
+    newStatus: UIStatus
   ) => {
     try {
       await api.updateOrderStatus(String(orderId), newStatus);
@@ -148,20 +131,19 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
     }
   };
 
-  // Filter memakai getter status
   const filteredOrders =
     statusFilter === "all"
       ? orders
-      : orders.filter((o) => getStatus(o as AnyOrder) === statusFilter);
+      : orders.filter((o) => mapToUIStatus(o as AnyOrder) === statusFilter);
 
   // Statistik
-  const pendingOrders   = orders.filter((o) => getStatus(o as AnyOrder) === "pending").length;
-  const preparingOrders = orders.filter((o) => getStatus(o as AnyOrder) === "preparing").length;
-  const readyOrders     = orders.filter((o) => getStatus(o as AnyOrder) === "ready").length;
+  const pendingOrders = orders.filter((o) => mapToUIStatus(o as AnyOrder) === "pending").length;
+  const paidOrders    = orders.filter((o) => mapToUIStatus(o as AnyOrder) === "paid").length;
+
   const todayRevenue = orders
     .filter((o) => {
       const d = getOrderDate(o as AnyOrder);
-      return d && d.toDateString() === new Date().toDateString() && getStatus(o as AnyOrder) === "completed";
+      return d && d.toDateString() === new Date().toDateString() && mapToUIStatus(o as AnyOrder) === "paid";
     })
     .reduce((sum, o) => sum + getTotal(o as AnyOrder), 0);
 
@@ -187,7 +169,7 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
         </div>
         <Select
           value={statusFilter}
-          onValueChange={(v: ExtStatus | "all") => setStatusFilter(v)}
+          onValueChange={(v: UIStatus | "all") => setStatusFilter(v)}
         >
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Filter status" />
@@ -195,16 +177,13 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
           <SelectContent>
             <SelectItem value="all">Semua</SelectItem>
             <SelectItem value="pending">Menunggu</SelectItem>
-            <SelectItem value="preparing">Diproses</SelectItem>
-            <SelectItem value="ready">Siap</SelectItem>
-            <SelectItem value="completed">Selesai</SelectItem>
             <SelectItem value="paid">Terbayar</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Statistik */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row justify-between pb-2">
             <CardTitle className="text-sm font-medium">Menunggu</CardTitle>
@@ -217,21 +196,11 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
 
         <Card>
           <CardHeader className="flex flex-row justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Diproses</CardTitle>
-            <ChefHat className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Terbayar</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{preparingOrders}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Siap</CardTitle>
-            <Package className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{readyOrders}</div>
+            <div className="text-2xl font-bold text-green-700">{paidOrders}</div>
           </CardContent>
         </Card>
 
@@ -277,7 +246,7 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
                 <TableBody>
                   {filteredOrders.map((o) => {
                     const ao = o as AnyOrder;
-                    const status = getStatus(ao);
+                    const status = mapToUIStatus(ao);
                     const next = getNextStatus(status);
                     const when = getOrderDate(ao);
                     return (
@@ -313,15 +282,15 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
                           {when ? when.toLocaleString("id-ID") : "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {next && (
+                          {next && status === "pending" && (
                             <Button
                               size="sm"
-                              onClick={() => handleStatusUpdate(o.id, next)}
-                              variant={status === "ready" ? "default" : "outline"}
+                              onClick={() => handleStatusUpdate(o.id, "paid")}
+                              variant="default"
                               className="flex items-center gap-1"
                             >
-                              {getStatusIcon(next)}
-                              {getNextStatusText(status)}
+                              <DollarSign className="w-4 h-4" />
+                              Tandai Terbayar
                             </Button>
                           )}
                         </TableCell>

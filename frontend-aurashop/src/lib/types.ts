@@ -24,7 +24,7 @@ export interface CartItem {
   subtotal?: number;
 }
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'paid';
+export type OrderStatus = 'pending' | 'paid';
 
 // Biarkan fleksibel—karena backend kamu punya beberapa alias nama field
 export interface Order {
