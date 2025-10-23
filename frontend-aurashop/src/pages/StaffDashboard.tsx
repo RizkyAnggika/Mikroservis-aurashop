@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, History, RefreshCcw } from "lucide-react";
-import { Tea, CartItem, Order } from "@/lib/types";
+import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
 
@@ -17,6 +17,16 @@ import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
+// 🧩 Helper getters agar kode tetap strongly typed
+const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
+const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
+const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
+const getOrderDate = (o: Order) =>
+  o.createdAt ?? (typeof o.orderDate === "string" ? o.orderDate : "") ?? (o.created_at ?? "");
+const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
+const getStatus = (o: Order): OrderStatus =>
+  (o.order_status ?? o.status ?? "pending") as OrderStatus;
+
 export default function OrdersPage() {
   // ====== POS (kasir) state ======
   const [teas, setTeas] = useState<Tea[]>([]);
@@ -26,9 +36,8 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [isPaying, setIsPaying] = useState(false);
-  // Simpan ID order draft (agar tidak bikin order baru setiap kali bayar)
-  const [draftOrderId, setDraftOrderId] = useState<string | null>(
-    () => localStorage.getItem("pos_draft_orderId")
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(() =>
+    localStorage.getItem("pos_draft_orderId")
   );
 
   // ====== Riwayat Orders state ======
@@ -36,13 +45,12 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "shop" | "pos">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | Order["status"]>("all");
+  const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
 
   const [customerName, setCustomerName] = useState<string>("");
-
-  const [cartNotes, setCartNotes] = useState<string>("");  // ADDED
-  const [cartExtra, setCartExtra] = useState<number>(0);   // ADDED
+  const [cartNotes, setCartNotes] = useState<string>("");
+  const [cartExtra, setCartExtra] = useState<number>(0);
 
   // ====== Helpers ======
   const fmtIDR = (v: number) =>
@@ -75,10 +83,17 @@ export default function OrdersPage() {
     })();
   }, []);
 
-  const debouncedSearch = useMemo(() => debounce((term: string) => setSearchTerm(term), 300), []);
-  const filtered = useMemo(() => filterTeas(teas, searchTerm, selectedCategory), [teas, searchTerm, selectedCategory]);
+  const debouncedSearch = useMemo(
+    () => debounce((term: string) => setSearchTerm(term), 300),
+    []
+  );
 
-  // ====== Cart handlers (POS) ======
+  const filtered = useMemo(
+    () => filterTeas(teas, searchTerm, selectedCategory),
+    [teas, searchTerm, selectedCategory]
+  );
+
+  // ====== Cart handlers ======
   const handleAdd = (item: Tea) => {
     setCartItems((prev) => {
       const found = prev.find((i) => i.tea.id === item.id);
@@ -87,61 +102,68 @@ export default function OrdersPage() {
           toast.error("Stok tidak mencukupi");
           return prev;
         }
-        return prev.map((i) => (i.tea.id === item.id ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map((i) =>
+          i.tea.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
       }
       return [...prev, { tea: item, quantity: 1 }];
     });
   };
 
   const handleUpdateQty = (id: string, qty: number) =>
-    setCartItems((prev) => prev.map((i) => (i.tea.id === id ? { ...i, quantity: qty } : i)));
+    setCartItems((prev) =>
+      prev.map((i) => (i.tea.id === id ? { ...i, quantity: qty } : i))
+    );
 
-  const handleRemove = (id: string) => setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
+  const handleRemove = (id: string) =>
+    setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
   const handleClear = () => setCartItems([]);
 
-  // (HAPUS blok "handleSave" lama yang orphan)
+  // ====== Ambil order dari riwayat ======
+  const loadOrderFromHistory = (o: Order) => {
+    const idStr = String(o.id);
+    setDraftOrderId(idStr);
+    localStorage.setItem("pos_draft_orderId", idStr);
 
-  // Ambil order dari riwayat ke keranjang
-const loadOrderFromHistory = (o: Order) => {
-  const idStr = String(o.id);
+    setCustomerName(getCustomerName(o));
+    setCartNotes(getNotes(o));
+    setCartExtra(getExtra(o));
 
-  // supaya handlePay tidak membuat order baru
-  setDraftOrderId(idStr);
-  localStorage.setItem("pos_draft_orderId", idStr);
+    const items: CartItem[] = (o.items ?? []).map((it) => ({
+      tea: {
+        id: String(it.productId ?? it.tea?.id ?? ""),
+        name: it.nama_produk ?? it.tea?.name ?? "Produk",
+        description: it.tea?.description ?? "",
+        price: Number(it.harga ?? it.tea?.price ?? 0),
+        image: it.tea?.image ?? "",
+        category: (it.tea?.category as Tea["category"]) ?? "green",
+        stock: it.tea?.stock ?? 999,
+        isAvailable: true,
+      },
+      quantity: Number(it.quantity ?? it.qty ?? 1),
+    }));
 
-  // isi form POS dari data order yang dipilih
-  setCustomerName((o as any).customer_name || (o as any).customerName || "Walk-in");
-  setCartNotes(((o as any).notes ?? (o as any).note ?? "") as string);
-  setCartExtra(Number((o as any).extra ?? (o as any).additionalFee ?? 0));
+    setCartItems(items);
+    toast.success(`Order #${idStr} (${getCustomerName(o)}) dimuat ke keranjang`);
+  };
 
-  const items: CartItem[] = (o.items ?? []).map((it: any) => ({
-    tea: {
-      id: String(it.productId ?? it.tea?.id ?? ""),
-      name: it.nama_produk ?? it.tea?.name ?? "Produk",
-      description: it.tea?.description ?? "",
-      price: Number(it.harga ?? it.tea?.price ?? 0),
-      image: it.tea?.image ?? "",
-      category: (it.tea?.category as any) ?? "green",
-      stock: it.tea?.stock ?? 999,
-      isAvailable: true,
-    },
-    quantity: Number(it.quantity ?? it.qty ?? 1),
-  }));
-
-  setCartItems(items);
-  toast.success(`Order #${idStr} (${(o as any).customer_name || (o as any).customerName || "Tanpa Nama"}) dimuat ke keranjang`);
-};
-
-  // ====== POS bayar → createOrder(source="pos") + payment ======
-  const handlePay = async ({ total, extra, notes, customerName }: {
-    total: number; extra: number; notes?: string; customerName?: string;
+  // ====== Proses pembayaran ======
+  const handlePay = async ({
+    total,
+    extra,
+    notes,
+    customerName,
+  }: {
+    total: number;
+    extra: number;
+    notes?: string;
+    customerName?: string;
   }) => {
     const name = (customerName || "").trim() || "Walk-in";
     setIsPaying(true);
     try {
       let orderId = draftOrderId;
 
-      // Kalau user memilih dari riwayat, orderId sudah ada → tidak bikin order baru
       if (!orderId) {
         const created = await api.createOrder({
           items: cartItems,
@@ -154,7 +176,6 @@ const loadOrderFromHistory = (o: Order) => {
         if (!oid) throw new Error("Gagal dapat orderId dari createOrder");
         orderId = String(oid);
       } else {
-        // kalau sudah ada draft → update dulu order-nya
         await api.updateOrder(orderId, {
           customerName: name,
           notes: notes ?? "",
@@ -163,18 +184,17 @@ const loadOrderFromHistory = (o: Order) => {
         });
       }
 
-      // Bayar order
-      await api.createPayment(orderId, { paymentMethod: "cash", amount: total });
-
-      // (opsional) sinkron status di service order
+      await api.createPayment(orderId, {
+        paymentMethod: "cash",
+        amount: total,
+      });
       await api.updateOrderStatus(orderId, "paid");
 
       toast.success(`💰 Pembayaran berhasil untuk ${name}`);
       setCartItems([]);
       setDraftOrderId(null);
       localStorage.removeItem("pos_draft_orderId");
-      setCustomerName(""); // reset input nama setelah bayar
-
+      setCustomerName("");
       if (isHistoryOpen) void loadOrders();
     } catch (e) {
       console.error(e);
@@ -189,7 +209,6 @@ const loadOrderFromHistory = (o: Order) => {
     setIsLoadingOrders(true);
     try {
       const list = await api.getOrders();
-      console.log("DEBUG: Orders loaded:", list);
       setOrders(list);
     } catch (e) {
       console.error("Gagal load orders:", e);
@@ -199,28 +218,33 @@ const loadOrderFromHistory = (o: Order) => {
     }
   };
 
-  // saat dialog dibuka → muat data
   useEffect(() => {
     if (isHistoryOpen) void loadOrders();
   }, [isHistoryOpen]);
 
   const filteredOrders = useMemo(() => {
     return orders
-      .filter((o) => (sourceFilter === "all" ? true : o.source === sourceFilter))
-      .filter((o) => (statusFilter === "all" ? true : o.status === statusFilter))
+      .filter((o) =>
+        sourceFilter === "all" ? true : o.source === sourceFilter
+      )
+      .filter((o) =>
+        statusFilter === "all" ? true : getStatus(o) === statusFilter
+      )
       .filter((o) =>
         orderSearch.trim()
-          ? ((o as any).customer_name || (o as any).customerName || "")
+          ? getCustomerName(o)
               .toLowerCase()
               .includes(orderSearch.trim().toLowerCase())
           : true
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
 
-  const updateStatus = async (orderId: string, status: Order["status"]) => {
+  const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
       await api.updateOrderStatus(orderId, status);
-      setOrders((prev) => prev.map((o) => (String(o.id) === orderId ? { ...o, status } : o)));
+      setOrders((prev) =>
+        prev.map((o) => (String(o.id) === orderId ? { ...o, status } : o))
+      );
       toast.success("Status diperbarui");
     } catch {
       toast.error("Gagal memperbarui status");
@@ -229,12 +253,16 @@ const loadOrderFromHistory = (o: Order) => {
 
   // ====== UI ======
   if (isLoading)
-    return <div className="p-6 text-center text-muted-foreground">Memuat menu…</div>;
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Memuat menu…
+      </div>
+    );
 
   return (
     <div className="min-h-screen px-4 py-6">
       <div className="max-w-[1400px] mx-auto">
-        {/* Header Aksi Riwayat */}
+        {/* Header & Dialog Riwayat */}
         <div className="mb-4 flex items-center justify-between">
           <div className="text-xl font-semibold">Kasir</div>
 
@@ -254,9 +282,8 @@ const loadOrderFromHistory = (o: Order) => {
                 </DialogTitle>
               </DialogHeader>
 
-              {/* Toolbar Filter & Search */}
+              {/* Toolbar Filter */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                {/* Search */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
@@ -267,20 +294,10 @@ const loadOrderFromHistory = (o: Order) => {
                   />
                 </div>
 
-                {/* Filter Source */}
-                <Select value={sourceFilter} onValueChange={(v: "all" | "shop" | "pos") => setSourceFilter(v)}>
-                  <SelectTrigger className="w-full sm:w-40">
-                    <SelectValue placeholder="Sumber" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Sumber</SelectItem>
-                    <SelectItem value="shop">Shop</SelectItem>
-                    <SelectItem value="pos">POS</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Filter Status */}
-                <Select value={statusFilter} onValueChange={(v: "all" | Order["status"]) => setStatusFilter(v)}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v: "all" | OrderStatus) => setStatusFilter(v)}
+                >
                   <SelectTrigger className="w-full sm:w-44">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -311,24 +328,21 @@ const loadOrderFromHistory = (o: Order) => {
                 ) : (
                   <div className="space-y-3">
                     {filteredOrders.map((o) => {
-                      const name = (o as any).customer_name || (o as any).customerName || "Tidak diketahui";
-                      const orderDate = (o as any).createdAt
-                        ? fmtTime((o as any).createdAt)
-                        : (o as any).orderDate
-                        ? fmtTime((o as any).orderDate)
-                        : "-";
-                      const total = Number((o as any).totalPrice ?? (o as any).total ?? 0);
-                      const notes = (o as any).notes ?? (o as any).note ?? "";
+                      const name = getCustomerName(o);
+                      const orderDateStr = getOrderDate(o);
+                      const orderDate = orderDateStr ? fmtTime(orderDateStr) : "-";
+                      const total = getTotal(o);
+                      const notes = getNotes(o);
+                      const status = getStatus(o);
 
                       return (
                         <Card key={o.id} className="p-4">
                           <div className="flex items-start justify-between gap-3">
-                            {/* Kiri: Info Order */}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium truncate">{name}</span>
                                 <Badge variant="secondary" className="capitalize">
-                                  {(o as any).source ?? "shop"}
+                                  {o.source ?? "shop"}
                                 </Badge>
                               </div>
 
@@ -336,37 +350,35 @@ const loadOrderFromHistory = (o: Order) => {
                                 {orderDate} • {(o.items?.length ?? 0)} item
                               </div>
 
-                              {/* Daftar item */}
                               <div className="mt-2 text-sm">
                                 {Array.isArray(o.items) && o.items.length > 0 ? (
-                                  o.items.slice(0, 3).map((it: any, i: number) => (
-                                    <span key={i} className="mr-2 flex items-center gap-2">
-                                      <span>
-                                        {(it?.tea?.name || it?.nama_produk || "Produk tidak diketahui")} ×{" "}
-                                        {(it?.quantity ?? it?.qty ?? 0)}
-                                      </span>
-                                    </span>
+                                  o.items.slice(0, 3).map((it, i) => (
+                                    <div key={i}>
+                                      {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                                      {it.quantity ?? it.qty ?? 0}
+                                    </div>
                                   ))
                                 ) : (
-                                  <span className="text-gray-500 italic">Tidak ada item</span>
+                                  <span className="text-gray-500 italic">
+                                    Tidak ada item
+                                  </span>
                                 )}
-
                                 {(o.items?.length ?? 0) > 3 && <span>…</span>}
                               </div>
 
-                              {/* Catatan */}
                               <div className="mt-1 text-xs text-muted-foreground">
                                 <span className="font-medium">Catatan:</span>{" "}
                                 {notes ? notes : <span className="italic text-gray-400">—</span>}
                               </div>
                             </div>
 
-                            {/* Kanan: Total dan Status */}
                             <div className="text-right">
                               <div className="font-semibold">{fmtIDR(total)}</div>
                               <Select
-                                value={(o as any).order_status || o.status || "pending"}
-                                onValueChange={(v: Order["status"]) => updateStatus(String(o.id), v)}
+                                value={status}
+                                onValueChange={(v: OrderStatus) =>
+                                  updateStatus(String(o.id), v)
+                                }
                               >
                                 <SelectTrigger className="mt-2 h-8 w-[140px]">
                                   <SelectValue />
@@ -400,7 +412,7 @@ const loadOrderFromHistory = (o: Order) => {
           </Dialog>
         </div>
 
-        {/* Search & Kategori (POS) */}
+        {/* Search & Kategori */}
         <div className="mb-4 flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -450,10 +462,10 @@ const loadOrderFromHistory = (o: Order) => {
               isPaying={isPaying}
               customerName={customerName}
               onChangeCustomerName={setCustomerName}
-              notesValue={cartNotes}           // ADDED
-              onChangeNotes={setCartNotes}     // ADDED
-              extraValue={cartExtra}           // ADDED
-              onChangeExtra={setCartExtra}     // ADDED
+              notesValue={cartNotes}
+              onChangeNotes={setCartNotes}
+              extraValue={cartExtra}
+              onChangeExtra={setCartExtra}
             />
           </div>
         </div>
