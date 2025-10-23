@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+// 📁 src/components/pos/POSCart.tsx
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -10,17 +11,22 @@ type Props = {
   onUpdateQuantity: (teaId: string, qty: number) => void;
   onRemoveItem: (teaId: string) => void;
   onClearCart: () => void;
-  onSave?: (p: { notes?: string; extra?: number; customerName?: string }) => void;
-  onPay?: (payload: { total: number; extra: number; notes?: string; customerName?: string }) => void;
+  onPay?: (payload: {
+    total: number;
+    extra: number;
+    notes?: string;
+    customerName?: string;
+  }) => void;
   isPaying?: boolean;
-  customerName?: string;                       // ← dari parent
-  onChangeCustomerName?: (v: string) => void;  // ← dari parent
-  
+
+  // dikontrol oleh parent (StaffOrder)
+  customerName?: string;
+  onChangeCustomerName?: (v: string) => void;
+
   notesValue?: string;
   onChangeNotes?: (v: string) => void;
   extraValue?: number;
   onChangeExtra?: (n: number) => void;
-
 };
 
 export default function POSCart({
@@ -30,17 +36,18 @@ export default function POSCart({
   onClearCart,
   onPay,
   isPaying,
-  customerName,              // ← pakai props
-  onChangeCustomerName,      // ← pakai props
+  customerName,
+  onChangeCustomerName,
+  notesValue = "",
+  onChangeNotes,
+  extraValue = 0,
+  onChangeExtra,
 }: Props) {
-  const [extra, setExtra] = useState<number>(0);
-  const [notes, setNotes] = useState<string>("");
-
   const subTotal = useMemo(
     () => cartItems.reduce((acc, it) => acc + it.tea.price * it.quantity, 0),
     [cartItems]
   );
-  const total = subTotal + (extra || 0);
+  const total = subTotal + (extraValue || 0);
 
   return (
     <div className="sticky top-4">
@@ -107,15 +114,15 @@ export default function POSCart({
               <span className="text-sm text-muted-foreground">Biaya Tambahan</span>
               <Input
                 type="number"
-                value={String(extra ?? 0)}
-                onChange={(e) => setExtra(Number(e.target.value || 0))}
+                value={String(extraValue ?? 0)}
+                onChange={(e) => onChangeExtra?.(Number(e.target.value || 0))}
                 className="w-36 h-9"
                 placeholder="0"
               />
             </div>
             <Input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={notesValue ?? ""}
+              onChange={(e) => onChangeNotes?.(e.target.value)}
               placeholder="Catatan (opsional)"
               className="h-9"
             />
@@ -133,10 +140,12 @@ export default function POSCart({
 
           {/* Aksi */}
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <Button variant="outline" onClick={onClearCart}>Kosongkan</Button>
+            <Button variant="outline" onClick={onClearCart}>
+              Kosongkan
+            </Button>
             <Button
-              className="col-span-1"
-              onClick={() => onPay?.({ total, extra, notes, customerName })}
+              className="col-span-2"
+              onClick={() => onPay?.({ total, extra: extraValue, notes: notesValue, customerName })}
               disabled={isPaying || cartItems.length === 0}
             >
               {isPaying ? "Memproses…" : "Bayar"}
