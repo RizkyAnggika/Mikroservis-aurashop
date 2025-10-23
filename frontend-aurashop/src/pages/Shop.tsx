@@ -153,7 +153,7 @@ export default function Shop() {
             <h2 className="text-5xl md:text-6xl font-bold text-gray-800 mb-6">
               Selamat Datang di{" "}
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-amber-600">
-                TeaShop Premium
+                Aura TeaShop
               </span>
             </h2>
             <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
