@@ -4,7 +4,6 @@ import { Tea, Order, CartItem, OrderStatus } from "@/lib/types";
 const API_URL = "http://localhost:4001/api/inventory";
 const ORDER_API = "http://localhost:5001/api/orders";
 const PAYMENT_API = "http://localhost:4002/api/orders";
-// const UPLOAD_API = "http://localhost:4001/api/inventory/upload";
 
 // ========================== //
 // 🟢 TIPE DATA BACKEND
@@ -132,6 +131,10 @@ export const api = {
 
   async updateTeaStock(id: string, diff: number): Promise<void> {
     await axios.patch(`${API_URL}/${id}/reduce-stok`, { quantity: diff });
+  },
+
+  async deleteOrder(orderId: string | number): Promise<void> {
+    await axios.delete(`${ORDER_API}/${orderId}`);
   },
 
   // -------------------------- //

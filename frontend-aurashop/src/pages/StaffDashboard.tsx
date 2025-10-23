@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, History, RefreshCcw } from "lucide-react";
+import { Search, History, RefreshCcw, Trash2 } from "lucide-react";
 import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
@@ -17,7 +17,7 @@ import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
-// 🧩 Helper getters agar kode tetap strongly typed
+// Helpers
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
 const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
 const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
@@ -27,7 +27,7 @@ const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
 const getStatus = (o: Order): OrderStatus =>
   (o.order_status ?? o.status ?? "pending") as OrderStatus;
 
-export default function OrdersPage() {
+export default function IndexPOSPage() {
   // ====== POS (kasir) state ======
   const [teas, setTeas] = useState<Tea[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -47,6 +47,7 @@ export default function OrdersPage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [customerName, setCustomerName] = useState<string>("");
   const [cartNotes, setCartNotes] = useState<string>("");
@@ -251,6 +252,30 @@ export default function OrdersPage() {
     }
   };
 
+  // ✅ Hapus order dari dialog Riwayat
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm(`Yakin hapus order #${orderId}?`)) return;
+    try {
+      setDeletingId(orderId);
+      await api.deleteOrder(orderId);
+      setOrders((prev) => prev.filter((o) => String(o.id) !== orderId));
+      if (draftOrderId === orderId) {
+        setDraftOrderId(null);
+        localStorage.removeItem("pos_draft_orderId");
+        setCartItems([]);
+        setCustomerName("");
+        setCartNotes("");
+        setCartExtra(0);
+      }
+      toast.success(`Order #${orderId} dihapus`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Gagal menghapus order");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // ====== UI ======
   if (isLoading)
     return (
@@ -342,7 +367,7 @@ export default function OrdersPage() {
                               <div className="flex items-center gap-2">
                                 <span className="font-medium truncate">{name}</span>
                                 <Badge variant="secondary" className="capitalize">
-                                  {o.source ?? "shop"}
+                                  {o.source ?? "pos"}
                                 </Badge>
                               </div>
 
@@ -389,17 +414,30 @@ export default function OrdersPage() {
                                 </SelectContent>
                               </Select>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="mt-2"
-                                onClick={() => {
-                                  loadOrderFromHistory(o);
-                                  setIsHistoryOpen(false);
-                                }}
-                              >
-                                Gunakan order ini
-                              </Button>
+                              <div className="mt-2 flex gap-2 justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    loadOrderFromHistory(o);
+                                    setIsHistoryOpen(false);
+                                  }}
+                                >
+                                  Gunakan order ini
+                                </Button>
+
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() => handleDeleteOrder(String(o.id))}
+                                  disabled={deletingId === String(o.id)}
+                                  title="Hapus order ini"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </Card>

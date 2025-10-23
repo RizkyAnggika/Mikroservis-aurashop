@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Receipt, Clock, DollarSign } from "lucide-react";
+import { Receipt, Clock, DollarSign, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -53,7 +53,13 @@ const getCustomerName = (o: AnyOrder) =>
 const mapToUIStatus = (o: AnyOrder): UIStatus => {
   const raw = (o.order_status ?? o.status ?? "pending").toString().toLowerCase();
   // peta alias BE → UIStatus
-  if (raw === "paid" || raw === "success" || raw === "completed" || raw === "payment_success" || raw === "payed") {
+  if (
+    raw === "paid" ||
+    raw === "success" ||
+    raw === "completed" ||
+    raw === "payment_success" ||
+    raw === "payed"
+  ) {
     return "paid";
   }
   return "pending";
@@ -97,6 +103,7 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<UIStatus | "all">("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrders();
@@ -122,12 +129,38 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
   ) => {
     try {
       await api.updateOrderStatus(String(orderId), newStatus);
-      await loadOrders();
+      // refresh ringan (tanpa request penuh) bisa juga:
+      setOrders((prev) =>
+        prev.map((o) =>
+          String(o.id) === String(orderId)
+            ? ({ ...o, order_status: newStatus } as Order)
+            : o
+        )
+      );
       onOrderUpdated?.();
       toast.success("Status pesanan berhasil diperbarui");
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Gagal memperbarui status pesanan");
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string | number) => {
+    const idStr = String(orderId);
+    if (!confirm(`Yakin menghapus order #${idStr}? Aksi ini tidak bisa dibatalkan.`)) return;
+
+    try {
+      setDeletingId(idStr);
+      await api.deleteOrder(idStr); // DELETE /api/orders/:id
+      // hapus dari state tanpa full reload
+      setOrders((prev) => prev.filter((o) => String(o.id) !== idStr));
+      onOrderUpdated?.();
+      toast.success(`Order #${idStr} dihapus`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal menghapus order");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -282,17 +315,31 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
                           {when ? when.toLocaleString("id-ID") : "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {next && status === "pending" && (
+                          <div className="flex justify-end gap-2">
+                            {next && status === "pending" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleStatusUpdate(o.id, "paid")}
+                                variant="default"
+                                className="flex items-center gap-1"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                                Tandai Terbayar
+                              </Button>
+                            )}
+
                             <Button
                               size="sm"
-                              onClick={() => handleStatusUpdate(o.id, "paid")}
-                              variant="default"
+                              variant="destructive"
                               className="flex items-center gap-1"
+                              onClick={() => handleDeleteOrder(o.id)}
+                              disabled={deletingId === String(o.id)}
+                              title="Hapus order ini"
                             >
-                              <DollarSign className="w-4 h-4" />
-                              Tandai Terbayar
+                              <Trash2 className="w-4 h-4" />
+                              {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
                             </Button>
-                          )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
