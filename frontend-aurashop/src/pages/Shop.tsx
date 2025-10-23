@@ -91,7 +91,7 @@ export default function Shop() {
       const req = {
         items: cartItems,
         customerName: payload.customerName.trim(),
-        note: payload.notes?.trim() || undefined,
+        notes: payload.notes?.trim() || undefined,
         clientId: getClientId(),
         source: "shop" as const,
       };
@@ -105,7 +105,7 @@ export default function Shop() {
   order_status: "pending",        // ✅ ganti dari status
   customer_name: req.customerName, // ✅ ganti dari customerName
   orderDate: new Date(),
-  note: req.note,
+  notes: req.notes,
   clientId: req.clientId,
   source: req.source,
 };

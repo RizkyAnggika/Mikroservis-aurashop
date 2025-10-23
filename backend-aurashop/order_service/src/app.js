@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./config/db');
 const orderRoutes = require('./routes/orderRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
+// const paymentRoutes = require('./routes/paymentRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 
 // Routes utama
 app.use('/api/orders', orderRoutes);
-app.use('/api/orders', paymentRoutes); // bisa diganti ke '/api/payments' kalau mau dipisah
+// app.use('/api/orders', paymentRoutes); // bisa diganti ke '/api/payments' kalau mau dipisah
 
 // 404 handler
 app.use((req, res, next) => {

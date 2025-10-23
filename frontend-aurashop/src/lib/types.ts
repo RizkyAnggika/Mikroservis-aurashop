@@ -27,7 +27,7 @@ export interface Order {
   items: CartItem[];
   totalPrice: number;
   total?: number; // ✅ alias untuk total
-  note?: string | null;
+  notes?: string | null;
   order_status: string;
   status?: string; // ✅ alias frontend
   clientId?: string; // ✅ tambahkan ini

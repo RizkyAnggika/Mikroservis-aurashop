@@ -25,6 +25,12 @@ export default function OrdersPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isPaying, setIsPaying] = useState(false);
+  // Simpan ID order draft (agar tidak bikin order baru setiap kali bayar)
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(
+    () => localStorage.getItem("pos_draft_orderId")
+  );
+
   // ====== Riwayat Orders state ======
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -32,6 +38,11 @@ export default function OrdersPage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "shop" | "pos">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | Order["status"]>("all");
+
+  const [customerName, setCustomerName] = useState<string>("");
+
+  const [cartNotes, setCartNotes] = useState<string>("");  // ADDED
+  const [cartExtra, setCartExtra] = useState<number>(0);   // ADDED
 
   // ====== Helpers ======
   const fmtIDR = (v: number) =>
@@ -88,27 +99,88 @@ export default function OrdersPage() {
   const handleRemove = (id: string) => setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
   const handleClear = () => setCartItems([]);
 
-  const handleSave = () => {
-    localStorage.setItem("pos_draft", JSON.stringify(cartItems));
-    toast.success("Draft pesanan disimpan");
-  };
+  // (HAPUS blok "handleSave" lama yang orphan)
 
-  // ====== POS bayar → createOrder(source="pos") ======
-  const handlePay = async ({ total, extra, notes }: { total: number; extra: number; notes?: string }) => {
+  // Ambil order dari riwayat ke keranjang
+const loadOrderFromHistory = (o: Order) => {
+  const idStr = String(o.id);
+
+  // supaya handlePay tidak membuat order baru
+  setDraftOrderId(idStr);
+  localStorage.setItem("pos_draft_orderId", idStr);
+
+  // isi form POS dari data order yang dipilih
+  setCustomerName((o as any).customer_name || (o as any).customerName || "Walk-in");
+  setCartNotes(((o as any).notes ?? (o as any).note ?? "") as string);
+  setCartExtra(Number((o as any).extra ?? (o as any).additionalFee ?? 0));
+
+  const items: CartItem[] = (o.items ?? []).map((it: any) => ({
+    tea: {
+      id: String(it.productId ?? it.tea?.id ?? ""),
+      name: it.nama_produk ?? it.tea?.name ?? "Produk",
+      description: it.tea?.description ?? "",
+      price: Number(it.harga ?? it.tea?.price ?? 0),
+      image: it.tea?.image ?? "",
+      category: (it.tea?.category as any) ?? "green",
+      stock: it.tea?.stock ?? 999,
+      isAvailable: true,
+    },
+    quantity: Number(it.quantity ?? it.qty ?? 1),
+  }));
+
+  setCartItems(items);
+  toast.success(`Order #${idStr} (${(o as any).customer_name || (o as any).customerName || "Tanpa Nama"}) dimuat ke keranjang`);
+};
+
+  // ====== POS bayar → createOrder(source="pos") + payment ======
+  const handlePay = async ({ total, extra, notes, customerName }: {
+    total: number; extra: number; notes?: string; customerName?: string;
+  }) => {
+    const name = (customerName || "").trim() || "Walk-in";
+    setIsPaying(true);
     try {
-      await api.createOrder({
-        items: cartItems,
-        customerName: "Walk-in",
-        notes,
-        source: "pos",
-        extra,
-      });
-      toast.success(`Pembayaran berhasil. Total ${fmtIDR(total)}`);
+      let orderId = draftOrderId;
+
+      // Kalau user memilih dari riwayat, orderId sudah ada → tidak bikin order baru
+      if (!orderId) {
+        const created = await api.createOrder({
+          items: cartItems,
+          customerName: name,
+          notes: notes ?? "",
+          source: "pos",
+          extra: extra ?? 0,
+        });
+        const oid = api.getOrderIdFromCreate(created);
+        if (!oid) throw new Error("Gagal dapat orderId dari createOrder");
+        orderId = String(oid);
+      } else {
+        // kalau sudah ada draft → update dulu order-nya
+        await api.updateOrder(orderId, {
+          customerName: name,
+          notes: notes ?? "",
+          extra: extra ?? 0,
+          items: cartItems,
+        });
+      }
+
+      // Bayar order
+      await api.createPayment(orderId, { paymentMethod: "cash", amount: total });
+
+      // (opsional) sinkron status di service order
+      await api.updateOrderStatus(orderId, "paid");
+
+      toast.success(`💰 Pembayaran berhasil untuk ${name}`);
       setCartItems([]);
+      setDraftOrderId(null);
+      localStorage.removeItem("pos_draft_orderId");
+      setCustomerName(""); // reset input nama setelah bayar
 
       if (isHistoryOpen) void loadOrders();
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast.error("Gagal memproses pembayaran");
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -138,7 +210,9 @@ export default function OrdersPage() {
       .filter((o) => (statusFilter === "all" ? true : o.status === statusFilter))
       .filter((o) =>
         orderSearch.trim()
-          ? o.customerName.toLowerCase().includes(orderSearch.trim().toLowerCase())
+          ? ((o as any).customer_name || (o as any).customerName || "")
+              .toLowerCase()
+              .includes(orderSearch.trim().toLowerCase())
           : true
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
@@ -238,91 +312,92 @@ export default function OrdersPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-  {filteredOrders.map((o) => {
-    const customerName = o.customer_name || o.customerName || "Tidak diketahui";
-    const orderDate = o.createdAt
-      ? fmtTime(o.createdAt)
-      : o.orderDate
-      ? fmtTime(o.orderDate)
-      : "-";
-    const total = Number(o.totalPrice ?? o.total ?? 0);
+                    {filteredOrders.map((o) => {
+                      const name = (o as any).customer_name || (o as any).customerName || "Tidak diketahui";
+                      const orderDate = (o as any).createdAt
+                        ? fmtTime((o as any).createdAt)
+                        : (o as any).orderDate
+                        ? fmtTime((o as any).orderDate)
+                        : "-";
+                      const total = Number((o as any).totalPrice ?? (o as any).total ?? 0);
+                      const notes = (o as any).notes ?? (o as any).note ?? "";
 
-    return (
-      <Card key={o.id} className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          {/* Kiri: Info Order */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-medium truncate">{customerName}</span>
-              <Badge variant="secondary" className="capitalize">
-                {o.source ?? "shop"}
-              </Badge>
-            </div>
+                      return (
+                        <Card key={o.id} className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            {/* Kiri: Info Order */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate">{name}</span>
+                                <Badge variant="secondary" className="capitalize">
+                                  {(o as any).source ?? "shop"}
+                                </Badge>
+                              </div>
 
-            <div className="text-xs text-muted-foreground">
-              {orderDate} • {o.items?.length || 0} item
-            </div>
+                              <div className="text-xs text-muted-foreground">
+                                {orderDate} • {(o.items?.length ?? 0)} item
+                              </div>
 
-            <div className="mt-2 text-sm">
-              {Array.isArray(o.items) && o.items.length > 0 ? (
-  o.items.slice(0, 3).map((it, i) => (
-    <span key={i} className="mr-2 flex items-center gap-2">
-      <span>
-        {(it.tea?.name || it.nama_produk || "Produk tidak diketahui")} ×{" "}
-        {(it.quantity || it.qty || 0)}
-      </span>
-      <Button
-        size="icon"
-        variant="outline"
-        className="h-6 w-6"
-        onClick={() => handleAdd({
-  id: it.productId || it.tea?.id || "",
-  name: it.nama_produk || it.tea?.name || "Produk tidak diketahui",
-  description: it.tea?.description || "",
-  price: it.harga || it.tea?.price || 0,
-  stock: it.tea?.stock || 99,
-  isAvailable: true,
-  image: it.tea?.image || "/placeholder.png", // ✅ default gambar
-  category: it.tea?.category || "black", // ✅ default kategori
-})}
+                              {/* Daftar item */}
+                              <div className="mt-2 text-sm">
+                                {Array.isArray(o.items) && o.items.length > 0 ? (
+                                  o.items.slice(0, 3).map((it: any, i: number) => (
+                                    <span key={i} className="mr-2 flex items-center gap-2">
+                                      <span>
+                                        {(it?.tea?.name || it?.nama_produk || "Produk tidak diketahui")} ×{" "}
+                                        {(it?.quantity ?? it?.qty ?? 0)}
+                                      </span>
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-500 italic">Tidak ada item</span>
+                                )}
 
-      >
-        +
-      </Button>
-    </span>
-  ))
-) : (
-  <span className="text-gray-500 italic">Tidak ada item</span>
-)}
+                                {(o.items?.length ?? 0) > 3 && <span>…</span>}
+                              </div>
 
-              {o.items.length > 3 && <span>…</span>}
-            </div>
-          </div>
+                              {/* Catatan */}
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                <span className="font-medium">Catatan:</span>{" "}
+                                {notes ? notes : <span className="italic text-gray-400">—</span>}
+                              </div>
+                            </div>
 
-          {/* Kanan: Total dan Status */}
-          <div className="text-right">
-            <div className="font-semibold">{fmtIDR(total)}</div>
-            <Select
-              value={o.order_status || o.status || "pending"}
-              onValueChange={(v: Order["status"]) => updateStatus(String(o.id), v)}
-            >
-              <SelectTrigger className="mt-2 h-8 w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="preparing">Preparing</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
-    );
-  })}
-</div>
+                            {/* Kanan: Total dan Status */}
+                            <div className="text-right">
+                              <div className="font-semibold">{fmtIDR(total)}</div>
+                              <Select
+                                value={(o as any).order_status || o.status || "pending"}
+                                onValueChange={(v: Order["status"]) => updateStatus(String(o.id), v)}
+                              >
+                                <SelectTrigger className="mt-2 h-8 w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="preparing">Preparing</SelectItem>
+                                  <SelectItem value="ready">Ready</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                </SelectContent>
+                              </Select>
 
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => {
+                                  loadOrderFromHistory(o);
+                                  setIsHistoryOpen(false);
+                                }}
+                              >
+                                Gunakan order ini
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 )}
               </ScrollArea>
             </DialogContent>
@@ -375,8 +450,14 @@ export default function OrdersPage() {
               onUpdateQuantity={handleUpdateQty}
               onRemoveItem={handleRemove}
               onClearCart={handleClear}
-              onSave={handleSave}
               onPay={handlePay}
+              isPaying={isPaying}
+              customerName={customerName}
+              onChangeCustomerName={setCustomerName}
+              notesValue={cartNotes}           // ADDED
+              onChangeNotes={setCartNotes}     // ADDED
+              extraValue={cartExtra}           // ADDED
+              onChangeExtra={setCartExtra}     // ADDED
             />
           </div>
         </div>

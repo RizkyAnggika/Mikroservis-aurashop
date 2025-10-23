@@ -1,4 +1,4 @@
-const inventoryService = require('../services/iventoryserv');
+const inventoryService = require('../services/inventoryService');
 
 exports.getAllProducts = async (req, res) => {
   try {

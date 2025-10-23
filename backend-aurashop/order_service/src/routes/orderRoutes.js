@@ -6,8 +6,9 @@ const {
   getOrdersByUser,
   updateOrderStatus,
   deleteOrder,
-  getInvoiceByOrderId, // 🧾 tambahkan import baru
-} = require('../controllers/orderController');
+  getInvoiceByOrderId,
+   updateOrder, // 🧾 tambahkan import baru
+} = require('../controllers/orderController.js');
 
 const router = express.Router();
 
@@ -29,6 +30,9 @@ router.get('/:id/invoice', getInvoiceByOrderId); // ← ✅ tambahkan ini
 
 // 🟣 Ambil satu pesanan berdasarkan ID
 router.get('/:id', getOrderById);
+
+// 🟠 Perbarui pesanan (nama, notes, items, total)
+router.put('/:id', updateOrder);           // ⬅️ tambahkan ini
 
 // 🟠 Ubah status pesanan
 router.put('/:id/status', updateOrderStatus);
