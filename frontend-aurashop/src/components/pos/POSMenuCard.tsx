@@ -5,6 +5,16 @@ import { Check } from "lucide-react"
 import { Tea } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
+const fmtIDR = (v: number | string) => {
+  const n = typeof v === "string" ? Number(v) : v;
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(n);
+};
+
 type Props = {
   item: Tea
   isSelected?: boolean
@@ -47,7 +57,7 @@ function POSMenuCardBase({ item, isSelected, onAdd }: Props) {
         </div>
         <div className="mt-1 text-[12px] text-muted-foreground">Stok: {item.stock}</div>
         <div className="mt-2 flex items-center justify-between">
-          <span className="font-semibold">Rp {item.price.toLocaleString("id-ID")}</span>
+          <span className="font-semibold">{fmtIDR(item.price)}</span>
           <Button
             size="sm"
             onClick={(e) => {

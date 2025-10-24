@@ -22,18 +22,26 @@ export default function Shop() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load menu
   useEffect(() => {
     (async () => {
       try {
-        const teasData = await api.getTeas();
-        setTeas(teasData);
-      } catch (error) {
-        console.error("Error loading teas:", error);
-        toast.error("Gagal memuat data teh");
-      } finally {
-        setIsLoading(false);
-      }
+  
+  const teasData = await api.getTeas();
+
+  const normalized = teasData.map((t: any) => ({
+    ...t,
+    price: Number(t.price ?? t.harga ?? 0),
+    stock: Number(t.stock ?? t.stok ?? 0),
+  }));
+
+  setTeas(normalized);
+} catch (error) {
+  console.error("Error loading teas:", error);
+  toast.error("Gagal memuat data teh");
+} finally {
+  setIsLoading(false);
+}
+
     })();
   }, []);
 
@@ -76,7 +84,6 @@ export default function Shop() {
     toast.success("Keranjang dikosongkan");
   };
 
-  // Checkout dari dalam Cart (dipanggil oleh OrderCart)
   const handleCartCheckout = async (payload: {
     customerName: string;
     notes?: string;
@@ -88,6 +95,13 @@ export default function Shop() {
     }
 
     try {
+
+      const total = cartItems.reduce(
+      (sum, item) =>
+        sum + Number(item.tea.price ?? 0) * Number(item.quantity ?? 0),
+      0
+    );
+
       const req = {
         items: cartItems,
         customerName: payload.customerName.trim(),
@@ -101,9 +115,10 @@ export default function Shop() {
       const newOrder: Order = {
         id: crypto.randomUUID?.() ?? String(Date.now()),
         items: cartItems,
-        totalPrice: payload.total,
+        totalPrice: Number(total),
         order_status: "pending",
         customer_name: req.customerName,
+        customerName: req.customerName,
         orderDate: new Date(),
         notes: req.notes,
         clientId: req.clientId,

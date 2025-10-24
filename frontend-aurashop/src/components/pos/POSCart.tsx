@@ -1,4 +1,3 @@
-// 📁 src/components/pos/POSCart.tsx
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -19,7 +18,6 @@ type Props = {
   }) => void;
   isPaying?: boolean;
 
-  // dikontrol oleh parent (StaffOrder)
   customerName?: string;
   onChangeCustomerName?: (v: string) => void;
 

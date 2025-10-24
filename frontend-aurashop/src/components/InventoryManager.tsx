@@ -26,10 +26,8 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTea, setEditingTea] = useState<Tea | null>(null);
-
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
-
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -111,17 +109,15 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
 
     try {
       if (editingTea) {
-        // ===== EDIT PRODUK =====
-        // Upload gambar dulu jika user memilih gambar baru
         if (imageFile) {
-          await api.uploadImage(editingTea.id, imageFile); // → POST /api/inventory/:id/image
+          await api.uploadImage(editingTea.id, imageFile); 
         }
 
         await api.updateTea(editingTea.id, {
           name: formData.name,
           description: formData.description,
           price,
-          image: `${API_URL}/${editingTea.id}/image`, // konsisten gunakan endpoint gambar
+          image: `${API_URL}/${editingTea.id}/image`, 
           category: formData.category,
           stock,
           isAvailable: formData.isAvailable && stock > 0,
@@ -129,19 +125,17 @@ export default function InventoryManager({ onTeaUpdated }: InventoryManagerProps
 
         toast.success('Teh berhasil diperbarui');
       } else {
-        // ===== TAMBAH PRODUK =====
-        // Buat produk dulu TANPA gambar
+        
         const created = await api.addTea({
           name: formData.name,
           description: formData.description,
           price,
-          image: '', // gambar akan menyusul
+          image: '', 
           category: formData.category,
           stock,
           isAvailable: formData.isAvailable && stock > 0,
         });
 
-        // Kalau ada gambar, upload ke endpoint /:id/image
         if (imageFile) {
           await api.uploadImage(created.id, imageFile);
         }

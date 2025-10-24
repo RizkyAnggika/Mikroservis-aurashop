@@ -3,7 +3,6 @@ import { Search, History, RefreshCcw, Trash2 } from "lucide-react";
 import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
-
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -11,13 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
 import POSMenuCard from "@/components/pos/POSMenuCard";
 import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
-// Helpers
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
 const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
 const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
@@ -28,7 +25,6 @@ const getStatus = (o: Order): OrderStatus =>
   (o.order_status ?? o.status ?? "pending") as OrderStatus;
 
 export default function IndexPOSPage() {
-  // ====== POS (kasir) state ======
   const [teas, setTeas] = useState<Tea[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,7 +36,6 @@ export default function IndexPOSPage() {
     localStorage.getItem("pos_draft_orderId")
   );
 
-  // ====== Riwayat Orders state ======
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
@@ -53,7 +48,6 @@ export default function IndexPOSPage() {
   const [cartNotes, setCartNotes] = useState<string>("");
   const [cartExtra, setCartExtra] = useState<number>(0);
 
-  // ====== Helpers ======
   const fmtIDR = (v: number) =>
     new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -69,7 +63,6 @@ export default function IndexPOSPage() {
       minute: "2-digit",
     });
 
-  // ====== Load menu (POS) ======
   useEffect(() => {
     (async () => {
       try {
@@ -94,7 +87,6 @@ export default function IndexPOSPage() {
     [teas, searchTerm, selectedCategory]
   );
 
-  // ====== Cart handlers ======
   const handleAdd = (item: Tea) => {
     setCartItems((prev) => {
       const found = prev.find((i) => i.tea.id === item.id);
@@ -120,7 +112,6 @@ export default function IndexPOSPage() {
     setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
   const handleClear = () => setCartItems([]);
 
-  // ====== Ambil order dari riwayat ======
   const loadOrderFromHistory = (o: Order) => {
     const idStr = String(o.id);
     setDraftOrderId(idStr);
@@ -148,7 +139,6 @@ export default function IndexPOSPage() {
     toast.success(`Order #${idStr} (${getCustomerName(o)}) dimuat ke keranjang`);
   };
 
-  // ====== Proses pembayaran ======
   const handlePay = async ({
     total,
     extra,
@@ -205,7 +195,6 @@ export default function IndexPOSPage() {
     }
   };
 
-  // ====== Riwayat Orders ======
   const loadOrders = async () => {
     setIsLoadingOrders(true);
     try {
@@ -252,7 +241,6 @@ export default function IndexPOSPage() {
     }
   };
 
-  // ✅ Hapus order dari dialog Riwayat
   const handleDeleteOrder = async (orderId: string) => {
     if (!confirm(`Yakin hapus order #${orderId}?`)) return;
     try {
@@ -276,7 +264,6 @@ export default function IndexPOSPage() {
     }
   };
 
-  // ====== UI ======
   if (isLoading)
     return (
       <div className="p-6 text-center text-muted-foreground">

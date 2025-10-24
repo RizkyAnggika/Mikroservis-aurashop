@@ -1,13 +1,9 @@
-// src/lib/auth.ts
 import { User, AuthState } from "@/lib/types";
 import { mockUsers } from "@/data/mockData";
 
 const AUTH_STORAGE_KEY = "teashop_auth";
 const CLIENT_ID_KEY = "teashop_client_id";
 
-/**
- * ✅ Generate atau ambil clientId unik untuk setiap browser/user
- */
 export function getClientId(): string {
   try {
     let id = localStorage.getItem(CLIENT_ID_KEY);
@@ -17,15 +13,10 @@ export function getClientId(): string {
     }
     return id;
   } catch {
-    // fallback kalau localStorage error (misal mode private)
     return Math.random().toString(36).slice(2, 10);
   }
 }
 
-/**
- * ✅ AuthService sederhana berbasis localStorage
- * Mendukung multi-role: admin, kasir, staf
- */
 export class AuthService {
   private static instance: AuthService;
   private authState: AuthState = { user: null, isAuthenticated: false };
@@ -39,7 +30,6 @@ export class AuthService {
     this.loadAuthState();
   }
 
-  // ---------- State Persistence ----------
   private loadAuthState(): void {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
@@ -55,7 +45,6 @@ export class AuthService {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(this.authState));
   }
 
-  // ---------- Auth Logic ----------
   login(username: string, password: string): boolean {
     const user = mockUsers.find((u) => u.username === username);
     if (user && password === "password123") {
@@ -83,7 +72,6 @@ export class AuthService {
     return this.authState.user?.role === role;
   }
 
-  // ---------- Role Permissions ----------
   canManageMenu(): boolean {
     return this.hasRole("admin");
   }
@@ -96,11 +84,9 @@ export class AuthService {
     return this.hasRole("admin") || this.hasRole("staf");
   }
 
-  // ---------- Client Identifier ----------
   getClientId(): string {
     return getClientId();
   }
 }
 
-// ✅ Ekspor instance tunggal
 export const authService = AuthService.getInstance();

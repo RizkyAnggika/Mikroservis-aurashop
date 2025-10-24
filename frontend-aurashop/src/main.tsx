@@ -8,8 +8,6 @@ import AdminDashboard from "@/pages/AdminDashboard"
 import StaffDashboard from "@/pages/StaffDashboard"
 import NotFound from "@/pages/NotFound"
 
-// Guard sederhana untuk demo (opsional)
-// Ganti allowed sesuai kebutuhan demo kamu.
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const allowed = true
   return allowed ? <>{children}</> : <Navigate to="/" replace />

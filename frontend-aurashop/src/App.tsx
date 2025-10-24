@@ -1,10 +1,9 @@
-// src/App.tsx
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import RootLayout from "@/layouts/RootLayout";   // ⬅️ tambahkan ini
-// import Index from "./pages/Index";
+import RootLayout from "@/layouts/RootLayout";   
+
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

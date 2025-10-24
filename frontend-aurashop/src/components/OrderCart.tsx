@@ -18,11 +18,9 @@ interface Props {
   onRemoveItem: (teaId: string) => void;
   onClearCart: () => void;
 
-  // Riwayat pesanan sesi (optional)
   sessionOrders?: Order[];
   onClearSessionOrders?: () => void;
 
-  // Checkout dari dalam cart (opsional, jika tidak disediakan maka tombol submit akan nonaktif)
   onCheckout?: (payload: {
     customerName: string;
     notes?: string;
@@ -51,13 +49,16 @@ export default function OrderCart({
     const item = cartItems.find(i => i.tea.id === teaId);
     if (!item) return;
     const q = Math.max(0, item.quantity + d);
-   if (q === 0) {
-  onRemoveItem(teaId);
-} else {
-  onUpdateQuantity(teaId, q);
-}
-
+    if (q === 0) {
+      onRemoveItem(teaId);
+    } else {
+      onUpdateQuantity(teaId, q);
+    }
   };
+
+  const getName = (o: Order) => o.customerName ?? o.customer_name ?? "Walk-in";
+  const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
+  const getStatus = (o: Order) => o.order_status ?? o.status ?? "pending";
 
   const submit = async () => {
     if (!customerName.trim()) {
@@ -118,18 +119,18 @@ export default function OrderCart({
             <div className="flex justify-between items-start">
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">
-                  {ord.customerName} •{" "}
+                  {getName(ord)} •{" "}
                   {new Date(ord.orderDate).toLocaleTimeString("id-ID", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {ord.items.length} item • status: {ord.status}
+                  {ord.items.length} item • status: {getStatus(ord)}
                 </p>
               </div>
               <div className="text-right font-semibold">
-                {formatIDR(ord.total)}
+                {formatIDR(getTotal(ord))}
               </div>
             </div>
           </Card>
@@ -141,9 +142,16 @@ export default function OrderCart({
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-lg z-50" size="lg">
+        <Button
+          className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-lg z-50"
+          size="lg"
+        >
           <ShoppingCart className="w-6 h-6" />
-          {totalItems > 0 && <Badge className="absolute -top-2 -right-2 px-2 py-1 text-xs">{totalItems}</Badge>}
+          {totalItems > 0 && (
+            <Badge className="absolute -top-2 -right-2 px-2 py-1 text-xs">
+              {totalItems}
+            </Badge>
+          )}
         </Button>
       </SheetTrigger>
 
@@ -161,27 +169,53 @@ export default function OrderCart({
                 {cartItems.map(item => (
                   <Card key={item.tea.id} className="p-4">
                     <div className="flex items-start gap-3">
-                      <img src={item.tea.image} alt={item.tea.name} className="w-16 h-16 object-cover rounded" />
+                      <img
+                        src={item.tea.image}
+                        alt={item.tea.name}
+                        className="w-16 h-16 object-cover rounded"
+                      />
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm truncate">{item.tea.name}</h4>
-                        <p className="text-sm text-gray-600">{formatIDR(item.tea.price)}</p>
+                        <h4 className="font-medium text-sm truncate">
+                          {item.tea.name}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          {formatIDR(item.tea.price)}
+                        </p>
                         <div className="flex items-center gap-2 mt-2">
-                          <Button size="sm" variant="outline" onClick={() => changeQty(item.tea.id, -1)} className="w-8 h-8 p-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => changeQty(item.tea.id, -1)}
+                            className="w-8 h-8 p-0"
+                          >
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="w-8 text-center text-sm">{item.quantity}</span>
-                          <Button size="sm" variant="outline" onClick={() => changeQty(item.tea.id, 1)} className="w-8 h-8 p-0"
-                                  disabled={item.quantity >= item.tea.stock}>
+                          <span className="w-8 text-center text-sm">
+                            {item.quantity}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => changeQty(item.tea.id, 1)}
+                            className="w-8 h-8 p-0"
+                            disabled={item.quantity >= item.tea.stock}
+                          >
                             <Plus className="w-3 h-3" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => onRemoveItem(item.tea.id)}
-                                  className="w-8 h-8 p-0 ml-2 text-red-500 hover:text-red-700">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onRemoveItem(item.tea.id)}
+                            className="w-8 h-8 p-0 ml-2 text-red-500 hover:text-red-700"
+                          >
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium text-sm">{formatIDR(item.tea.price * item.quantity)}</p>
+                        <p className="font-medium text-sm">
+                          {formatIDR(item.tea.price * item.quantity)}
+                        </p>
                       </div>
                     </div>
                   </Card>
@@ -192,12 +226,13 @@ export default function OrderCart({
             )}
           </ScrollArea>
 
-          {/* Footer checkout hanya muncul ketika ada item di keranjang */}
           {cartItems.length > 0 && (
             <div className="border-t pt-4 mt-4 space-y-4">
               <div className="flex justify-between items-center font-semibold">
                 <span>Total:</span>
-                <span className="text-lg text-green-600">{formatIDR(totalPrice)}</span>
+                <span className="text-lg text-green-600">
+                  {formatIDR(totalPrice)}
+                </span>
               </div>
 
               <div className="space-y-3">
@@ -223,7 +258,12 @@ export default function OrderCart({
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={onClearCart} className="flex-1" disabled={isSubmitting}>
+                <Button
+                  variant="outline"
+                  onClick={onClearCart}
+                  className="flex-1"
+                  disabled={isSubmitting}
+                >
                   Kosongkan
                 </Button>
                 <Button

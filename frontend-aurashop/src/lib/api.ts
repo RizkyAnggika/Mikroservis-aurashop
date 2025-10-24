@@ -1,13 +1,10 @@
 import axios, { AxiosError } from "axios";
 import { Tea, Order, CartItem, OrderStatus } from "@/lib/types";
 
-const API_URL = "http://localhost:4001/api/inventory";
-const ORDER_API = "http://localhost:5001/api/orders";
-const PAYMENT_API = "http://localhost:4002/api/orders";
+const API_URL = "http://192.168.1.123:4001/api/inventory";
+const ORDER_API = "http://192.168.1.123:5001/api/orders";
+const PAYMENT_API = "http://192.168.1.123:4002/api/orders";
 
-// ========================== //
-// 🟢 TIPE DATA BACKEND
-// ========================== //
 interface BackendTea {
   id: number;
   nama_produk: string;
@@ -36,17 +33,12 @@ interface BackendOrder {
 }
 
 type UnknownRecord = Record<string, unknown>;
-const isObject = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
+const isObject = (v: unknown): v is UnknownRecord =>
+  typeof v === "object" && v !== null;
 
-// ========================== //
-// 🔹 STATUS NORMALIZER
-// ========================== //
 const ORDER_STATUS_MAP: Record<string, OrderStatus> = {
-  // FE status yang diizinkan
   pending: "pending",
   paid: "paid",
-
-  // alias backend → dipetakan agar valid
   processing: "pending",
   process: "pending",
   unpaid: "pending",
@@ -71,26 +63,19 @@ export type CreateOrderResponse = {
   data?: Record<string, unknown>;
 } & Record<string, unknown>;
 
-
-// ========================== //
-// 🔧 API IMPLEMENTATION
-// ========================== //
 export const api = {
   updateOrder,
 
-  // -------------------------- //
-  // 🟢 PRODUK (INVENTORY)
-  // -------------------------- //
   async getTeas(): Promise<Tea[]> {
     const res = await axios.get<BackendTea[]>(API_URL);
     return res.data.map((item) => ({
       id: String(item.id),
       name: item.nama_produk,
       description: item.deskripsi,
-      price: item.harga,
+      price: Number(item.harga ?? 0),
       image: item.gambar,
       category: item.kategori as Tea["category"],
-      stock: item.stok,
+      stock: Number(item.stok ?? 0),
       isAvailable: item.stok > 0,
     }));
   },
@@ -118,10 +103,13 @@ export const api = {
     });
   },
 
-  async uploadImage(productId: string | number, file: File): Promise<{ url: string }> {
+  async uploadImage(
+    productId: string | number,
+    file: File
+  ): Promise<{ url: string }> {
     const fd = new FormData();
-    fd.append("image", file); // <-- harus 'image' sesuai multer.single('image')
-    await axios.post(`${API_URL}/${productId}/image`, fd); // ❗️benar: /:id/image
+    fd.append("image", file);
+    await axios.post(`${API_URL}/${productId}/image`, fd);
     return { url: `${API_URL}/${productId}/image` };
   },
 
@@ -137,9 +125,6 @@ export const api = {
     await axios.delete(`${ORDER_API}/${orderId}`);
   },
 
-  // -------------------------- //
-  // 🟡 PESANAN (ORDER)
-  // -------------------------- //
   async createOrder(payload: {
     items: CartItem[];
     customerName: string;
@@ -158,8 +143,9 @@ export const api = {
       items: payload.items.map((it) => ({
         productId: it.tea.id,
         qty: it.quantity,
+        harga: Number(it.tea.price ?? 0),
       })),
-      totalPrice: total,
+      totalPrice: Number(total),
       notes: payload.notes || null,
       order_status: "pending",
     };
@@ -168,7 +154,9 @@ export const api = {
     return res.data as CreateOrderResponse;
   },
 
-  getOrderIdFromCreate(res: CreateOrderResponse | unknown): string | number | undefined {
+  getOrderIdFromCreate(
+    res: CreateOrderResponse | unknown
+  ): string | number | undefined {
     if (!isObject(res)) return undefined;
     const data = isObject(res.data) ? res.data : undefined;
     return (
@@ -185,53 +173,48 @@ export const api = {
 
     let data: BackendOrder[] = [];
     if (Array.isArray(raw)) data = raw as BackendOrder[];
-    else if (isObject(raw) && Array.isArray(raw.data)) data = raw.data as BackendOrder[];
-    else if (isObject(raw) && Array.isArray(raw.orders)) data = raw.orders as BackendOrder[];
+    else if (isObject(raw) && Array.isArray(raw.data))
+      data = raw.data as BackendOrder[];
+    else if (isObject(raw) && Array.isArray(raw.orders))
+      data = raw.orders as BackendOrder[];
 
     return data.map((order) => {
-  const status = normalizeOrderStatus(order.order_status, "pending"); // ✅ normalisasi dulu
-
-  return {
-    id: String(order.id),
-    customer_name: order.customer_name || "Tanpa Nama",
-    items: order.items.map(
-      (it): CartItem => ({
-        tea: {
-          id: String(it.productId),
-          name: it.nama_produk,
-          description: "",
-          price: it.harga,
-          image: "",
-          category: "green",
-          stock: 0,
-          isAvailable: true,
-        },
-        productId: String(it.productId),
-        nama_produk: it.nama_produk,
-        harga: it.harga,
-        quantity: it.quantity,
-      })
-    ),
-    totalPrice: order.totalPrice,
-
-    // ⬇️ gunakan hasil normalisasi (OrderStatus), bukan string backend mentah
-    order_status: status,
-    status, // (opsional) kalau interface Order kamu juga punya properti 'status'
-
-    notes: order.notes ?? null,
-    orderDate: order.createdAt ?? new Date().toISOString(),
-    source: "pos",
-  } as Order; // opsional kalau TS masih rewel
-});
+      const status = normalizeOrderStatus(order.order_status, "pending");
+      return {
+        id: String(order.id),
+        customer_name: order.customer_name || "Tanpa Nama",
+        items: order.items.map(
+          (it): CartItem => ({
+            tea: {
+              id: String(it.productId),
+              name: it.nama_produk,
+              description: "",
+              price: Number(it.harga ?? 0),
+              image: "",
+              category: "green",
+              stock: 0,
+              isAvailable: true,
+            },
+            productId: String(it.productId),
+            nama_produk: it.nama_produk,
+            harga: it.harga,
+            quantity: it.quantity,
+          })
+        ),
+        totalPrice: order.totalPrice,
+        order_status: status,
+        status,
+        notes: order.notes ?? null,
+        orderDate: order.createdAt ?? new Date().toISOString(),
+        source: "pos",
+      } as Order;
+    });
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<void> {
     await axios.put(`${ORDER_API}/${orderId}/status`, { order_status: status });
   },
 
-  // -------------------------- //
-  // 💳 PEMBAYARAN (PAYMENT)
-  // -------------------------- //
   async createPayment(
     orderId: number | string,
     payload: { paymentMethod: string; amount: number }
@@ -241,9 +224,9 @@ export const api = {
       return res.data;
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        console.error("❌ Gagal membuat pembayaran:", err.response?.data);
+        console.error("Gagal membuat pembayaran:", err.response?.data);
       } else {
-        console.error("❌ Gagal membuat pembayaran:", err);
+        console.error("Gagal membuat pembayaran:", err);
       }
       throw err;
     }
@@ -255,9 +238,6 @@ export const api = {
   },
 };
 
-// ========================== //
-// 🔧 HELPER & UPDATE ORDER
-// ========================== //
 function mapItemsForBackend(items: CartItem[]) {
   return items.map((it) => ({
     productId: it.tea?.id ?? it.productId,
@@ -282,8 +262,10 @@ async function updateOrder(
   if (payload.items) {
     body.items = mapItemsForBackend(payload.items);
     body.totalPrice =
-      payload.items.reduce((acc, it) => acc + it.tea.price * it.quantity, 0) +
-      (payload.extra ?? 0);
+      payload.items.reduce(
+        (acc, it) => acc + it.tea.price * it.quantity,
+        0
+      ) + (payload.extra ?? 0);
   }
 
   Object.keys(body).forEach((k) => {
@@ -311,7 +293,9 @@ async function updateOrder(
       if (axios.isAxiosError(err)) {
         const status = err.response?.status;
         if (status === 404) {
-          console.warn(`[updateOrder] ${a.method.toUpperCase()} ${a.url} → 404, coba endpoint lain…`);
+          console.warn(
+            `[updateOrder] ${a.method.toUpperCase()} ${a.url} → 404, coba endpoint lain…`
+          );
           lastErr = err;
           continue;
         }
