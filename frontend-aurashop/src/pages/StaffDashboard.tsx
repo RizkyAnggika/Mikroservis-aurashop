@@ -23,6 +23,17 @@ const getOrderDate = (o: Order) =>
 const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
 const getStatus = (o: Order): OrderStatus =>
   (o.order_status ?? o.status ?? "pending") as OrderStatus;
+const getPaidAt = (o: Order) =>
+  (o as any).paidAt ??
+  (o as any).paid_at ??
+  (o as any).payment_time ??
+  (o as any).updatedAt ??
+  "";
+
+const getDisplayTimeISO = (o: Order) => {
+  const s = getStatus(o);
+  return s === "paid" ? getPaidAt(o) || getOrderDate(o) : getOrderDate(o);
+};
 
 export default function IndexPOSPage() {
   const [teas, setTeas] = useState<Tea[]>([]);
@@ -181,12 +192,14 @@ export default function IndexPOSPage() {
       });
       await api.updateOrderStatus(orderId, "paid");
 
+      // ⬇️ refetch dari backend supaya jam paid mengikuti server
+      await loadOrders();
+
       toast.success(`💰 Pembayaran berhasil untuk ${name}`);
       setCartItems([]);
       setDraftOrderId(null);
       localStorage.removeItem("pos_draft_orderId");
       setCustomerName("");
-      if (isHistoryOpen) void loadOrders();
     } catch (e) {
       console.error(e);
       toast.error("Gagal memproses pembayaran");
@@ -232,9 +245,8 @@ export default function IndexPOSPage() {
   const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
       await api.updateOrderStatus(orderId, status);
-      setOrders((prev) =>
-        prev.map((o) => (String(o.id) === orderId ? { ...o, status } : o))
-      );
+      // ⬇️ refetch agar waktu paid/updated ikut backend
+      await loadOrders();
       toast.success("Status diperbarui");
     } catch {
       toast.error("Gagal memperbarui status");
@@ -341,8 +353,8 @@ export default function IndexPOSPage() {
                   <div className="space-y-3">
                     {filteredOrders.map((o) => {
                       const name = getCustomerName(o);
-                      const orderDateStr = getOrderDate(o);
-                      const orderDate = orderDateStr ? fmtTime(orderDateStr) : "-";
+                      const displayISO = getDisplayTimeISO(o);
+                      const displayTime = displayISO ? fmtTime(displayISO) : "-";
                       const total = getTotal(o);
                       const notes = getNotes(o);
                       const status = getStatus(o);
@@ -359,7 +371,7 @@ export default function IndexPOSPage() {
                               </div>
 
                               <div className="text-xs text-muted-foreground">
-                                {orderDate} • {(o.items?.length ?? 0)} item
+                                {displayTime} • {(o.items?.length ?? 0)} item
                               </div>
 
                               <div className="mt-2 text-sm">

@@ -30,6 +30,11 @@ interface BackendOrder {
   order_status: string;
   notes?: string | null;
   createdAt?: string;
+  // backend bisa pakai snake_case:
+  // created_at?: string;
+  // paidAt?: string;
+  // paid_at?: string;
+  // payment_time?: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -180,6 +185,19 @@ export const api = {
 
     return data.map((order) => {
       const status = normalizeOrderStatus(order.order_status, "pending");
+
+      // tarik timestamp dari berbagai kemungkinan field milik backend
+      const created =
+        order.createdAt ??
+        (order as any).created_at ??
+        null;
+
+      const paid =
+        (order as any).paidAt ??
+        (order as any).paid_at ??
+        (order as any).payment_time ??
+        null;
+
       return {
         id: String(order.id),
         customer_name: order.customer_name || "Tanpa Nama",
@@ -202,11 +220,19 @@ export const api = {
           })
         ),
         totalPrice: order.totalPrice,
+
         order_status: status,
         status,
+
         notes: order.notes ?? null,
-        orderDate: order.createdAt ?? new Date().toISOString(),
-        source: "pos",
+
+        // ⬇️ hanya pakai waktu dari backend (tanpa fallback FE)
+        orderDate: created,
+
+        // ⬇️ simpan paidAt kalau backend kirim (untuk tampilan jam "paid")
+        paidAt: paid,
+
+        source: (order as any).source ?? "pos",
       } as Order;
     });
   },
