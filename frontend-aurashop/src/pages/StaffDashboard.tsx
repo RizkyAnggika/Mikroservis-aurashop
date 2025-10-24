@@ -4,8 +4,20 @@ import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,27 +27,47 @@ import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
+// ---------- Helpers ----------
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
 const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
 const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
+
+// catat semua kemungkinan nama field dari backend
 const getOrderDate = (o: Order) =>
-  o.createdAt ?? (typeof o.orderDate === "string" ? o.orderDate : "") ?? (o.created_at ?? "");
-const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
-const getStatus = (o: Order): OrderStatus =>
-  (o.order_status ?? o.status ?? "pending") as OrderStatus;
-const getPaidAt = (o: Order) =>
-  (o as any).paidAt ??
-  (o as any).paid_at ??
-  (o as any).payment_time ??
-  (o as any).updatedAt ??
+  o.createdAt ??
+  (typeof o.orderDate === "string" ? o.orderDate : "") ??
+  (o as any).created_at ??
   "";
 
+const getUpdatedAt = (o: Order) =>
+  (o as any).updatedAt ?? (o as any).updated_at ?? "";
+
+const getPaidAt = (o: Order) =>
+  (o as any).paidAt ?? (o as any).paid_at ?? (o as any).payment_time ?? "";
+
+const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
+
+const getStatus = (o: Order): OrderStatus =>
+  (o.order_status ?? o.status ?? "pending") as OrderStatus;
+
+// Urutan prioritas waktu tampil:
+// 1) updatedAt (kalau ada)
+// 2) paidAt (kalau status "paid")
+// 3) createdAt
 const getDisplayTimeISO = (o: Order) => {
-  const s = getStatus(o);
-  return s === "paid" ? getPaidAt(o) || getOrderDate(o) : getOrderDate(o);
+  const updated = getUpdatedAt(o);
+  if (updated) return updated;
+
+  const status = getStatus(o);
+  if (status === "paid") {
+    return getPaidAt(o) || getOrderDate(o);
+  }
+
+  return getOrderDate(o);
 };
 
 export default function IndexPOSPage() {
+  // ====== POS (kasir) state ======
   const [teas, setTeas] = useState<Tea[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,6 +79,7 @@ export default function IndexPOSPage() {
     localStorage.getItem("pos_draft_orderId")
   );
 
+  // ====== Riwayat Orders state ======
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
@@ -59,6 +92,7 @@ export default function IndexPOSPage() {
   const [cartNotes, setCartNotes] = useState<string>("");
   const [cartExtra, setCartExtra] = useState<number>(0);
 
+  // ====== Formatters ======
   const fmtIDR = (v: number) =>
     new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -74,6 +108,7 @@ export default function IndexPOSPage() {
       minute: "2-digit",
     });
 
+  // ====== Load menu (POS) ======
   useEffect(() => {
     (async () => {
       try {
@@ -98,6 +133,7 @@ export default function IndexPOSPage() {
     [teas, searchTerm, selectedCategory]
   );
 
+  // ====== Cart handlers ======
   const handleAdd = (item: Tea) => {
     setCartItems((prev) => {
       const found = prev.find((i) => i.tea.id === item.id);
@@ -123,6 +159,7 @@ export default function IndexPOSPage() {
     setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
   const handleClear = () => setCartItems([]);
 
+  // ====== Ambil order dari riwayat ke keranjang ======
   const loadOrderFromHistory = (o: Order) => {
     const idStr = String(o.id);
     setDraftOrderId(idStr);
@@ -150,6 +187,7 @@ export default function IndexPOSPage() {
     toast.success(`Order #${idStr} (${getCustomerName(o)}) dimuat ke keranjang`);
   };
 
+  // ====== Proses pembayaran ======
   const handlePay = async ({
     total,
     extra,
@@ -192,7 +230,7 @@ export default function IndexPOSPage() {
       });
       await api.updateOrderStatus(orderId, "paid");
 
-      // ⬇️ refetch dari backend supaya jam paid mengikuti server
+      // refetch supaya updatedAt dari backend langsung tampil
       await loadOrders();
 
       toast.success(`💰 Pembayaran berhasil untuk ${name}`);
@@ -208,6 +246,7 @@ export default function IndexPOSPage() {
     }
   };
 
+  // ====== Riwayat Orders ======
   const loadOrders = async () => {
     setIsLoadingOrders(true);
     try {
@@ -227,17 +266,11 @@ export default function IndexPOSPage() {
 
   const filteredOrders = useMemo(() => {
     return orders
-      .filter((o) =>
-        sourceFilter === "all" ? true : o.source === sourceFilter
-      )
-      .filter((o) =>
-        statusFilter === "all" ? true : getStatus(o) === statusFilter
-      )
+      .filter((o) => (sourceFilter === "all" ? true : o.source === sourceFilter))
+      .filter((o) => (statusFilter === "all" ? true : getStatus(o) === statusFilter))
       .filter((o) =>
         orderSearch.trim()
-          ? getCustomerName(o)
-              .toLowerCase()
-              .includes(orderSearch.trim().toLowerCase())
+          ? getCustomerName(o).toLowerCase().includes(orderSearch.trim().toLowerCase())
           : true
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
@@ -245,7 +278,7 @@ export default function IndexPOSPage() {
   const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
       await api.updateOrderStatus(orderId, status);
-      // ⬇️ refetch agar waktu paid/updated ikut backend
+      // refetch supaya updatedAt/paidAt ikut backend
       await loadOrders();
       toast.success("Status diperbarui");
     } catch {
@@ -276,12 +309,9 @@ export default function IndexPOSPage() {
     }
   };
 
+  // ====== UI ======
   if (isLoading)
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Memuat menu…
-      </div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Memuat menu…</div>;
 
   return (
     <div className="min-h-screen px-4 py-6">
@@ -383,9 +413,7 @@ export default function IndexPOSPage() {
                                     </div>
                                   ))
                                 ) : (
-                                  <span className="text-gray-500 italic">
-                                    Tidak ada item
-                                  </span>
+                                  <span className="text-gray-500 italic">Tidak ada item</span>
                                 )}
                                 {(o.items?.length ?? 0) > 3 && <span>…</span>}
                               </div>
@@ -400,9 +428,7 @@ export default function IndexPOSPage() {
                               <div className="font-semibold">{fmtIDR(total)}</div>
                               <Select
                                 value={status}
-                                onValueChange={(v: OrderStatus) =>
-                                  updateStatus(String(o.id), v)
-                                }
+                                onValueChange={(v: OrderStatus) => updateStatus(String(o.id), v)}
                               >
                                 <SelectTrigger className="mt-2 h-8 w-[140px]">
                                   <SelectValue />

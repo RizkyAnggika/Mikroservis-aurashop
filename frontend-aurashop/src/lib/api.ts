@@ -30,6 +30,7 @@ interface BackendOrder {
   order_status: string;
   notes?: string | null;
   createdAt?: string;
+  updatedAt?: string;
   // backend bisa pakai snake_case:
   // created_at?: string;
   // paidAt?: string;
@@ -185,7 +186,7 @@ export const api = {
 
     return data.map((order) => {
       const status = normalizeOrderStatus(order.order_status, "pending");
-
+      
       // tarik timestamp dari berbagai kemungkinan field milik backend
       const created =
         order.createdAt ??
