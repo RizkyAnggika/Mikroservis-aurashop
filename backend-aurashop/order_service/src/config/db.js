@@ -11,7 +11,20 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  timezone: '+08:00',
+  dateStrings: true,
 });
+
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    await conn.query("SET time_zone = '+08:00'");
+    console.log('✅ Time zone set to +08:00');
+    conn.release();
+  } catch (error) {
+    console.error('❌ Gagal set time zone:', error.message);
+  }
+})();
 
 // Tes koneksi awal dengan retry (biar gak langsung gagal di Docker)
 const testConnection = async (retries = 10, delay = 3000) => {
