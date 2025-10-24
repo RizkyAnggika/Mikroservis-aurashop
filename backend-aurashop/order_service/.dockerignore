@@ -1,0 +1,16 @@
+# Node dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+
+.env
+
+# Logs and temp files
+*.log
+tmp/
+*.tmp
+
+# IDE/editor files
+.vscode/
+.idea/
