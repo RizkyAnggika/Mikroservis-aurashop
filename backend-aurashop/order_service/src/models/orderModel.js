@@ -1,21 +1,23 @@
+// 📁 models/orderModel.js
 const db = require('../config/db');
 
 const Order = {
   // 🟢 Buat pesanan baru
   create: async (data) => {
+    const notes = (data.notes ?? data.note) || null;
     const query = `
-      INSERT INTO orders (userId, customer_name, items, totalPrice, note, order_status, created_at)
+      INSERT INTO orders (userId, customer_name, items, totalPrice, notes, order_status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, NOW())
     `;
     const [result] = await db.query(query, [
       data.userId,
       data.customer_name,
-      JSON.stringify(data.items),
+      JSON.stringify(data.items || []),
       data.totalPrice,
-      data.note,
+      notes,
       data.order_status || 'pending',
     ]);
-    return result; // bisa ambil result.insertId
+    return result;
   },
 
   // 🔵 Ambil semua pesanan
@@ -24,13 +26,13 @@ const Order = {
     return rows;
   },
 
-  // 🟣 Ambil pesanan berdasarkan ID
+  // 🟣 Ambil satu pesanan
   findById: async (id) => {
     const [rows] = await db.query('SELECT * FROM orders WHERE id = ?', [id]);
-    return rows[0]; // ambil satu
+    return rows[0];
   },
 
-  // 🟢 Ambil semua pesanan berdasarkan userId (riwayat per user)
+  // 🟢 Ambil pesanan per user
   findByUserId: async (userId) => {
     const [rows] = await db.query(
       'SELECT * FROM orders WHERE userId = ? ORDER BY created_at DESC',
@@ -39,7 +41,7 @@ const Order = {
     return rows;
   },
 
-  // 🟣 Ambil semua pesanan berdasarkan status
+  // 🟣 Ambil pesanan per status
   findByStatus: async (status) => {
     const [rows] = await db.query(
       'SELECT * FROM orders WHERE order_status = ? ORDER BY created_at DESC',
@@ -48,7 +50,7 @@ const Order = {
     return rows;
   },
 
-  // 🟠 Update status pesanan
+  // 🟠 Update status
   updateStatus: async (id, status) => {
     const [result] = await db.query(
       'UPDATE orders SET order_status = ? WHERE id = ?',
@@ -57,27 +59,55 @@ const Order = {
     return result;
   },
 
-  // 🔴 Hapus pesanan
+  // 🔴 Hapus
   delete: async (id) => {
     const [result] = await db.query('DELETE FROM orders WHERE id = ?', [id]);
     return result;
   },
 
-  // 🧾 Ambil pesanan + pembayaran (untuk invoice)
+  // 🧾 Join dengan payments (opsional)
   findWithPaymentById: async (orderId) => {
     const query = `
-      SELECT 
-        o.*, 
-        p.id AS payment_id,
-        p.paymentMethod,
-        p.amount AS payment_amount,
-        p.status AS payment_status
+      SELECT o.*, p.id AS payment_id, p.paymentMethod, p.amount AS payment_amount, p.status AS payment_status
       FROM orders o
       LEFT JOIN payments p ON o.id = p.orderId
       WHERE o.id = ?
     `;
     const [rows] = await db.query(query, [orderId]);
     return rows[0];
+  },
+
+  // 🟠 UPDATE field pesanan (nama, items, total, notes)
+  update: async (id, data) => {
+    const sets = [];
+    const vals = [];
+
+    if (data.customer_name !== undefined) {
+      sets.push('customer_name = ?');
+      vals.push(data.customer_name);
+    }
+    if (data.items !== undefined) {
+      sets.push('items = ?');
+      vals.push(JSON.stringify(data.items || []));
+    }
+    if (data.totalPrice !== undefined) {
+      sets.push('totalPrice = ?');
+      vals.push(Number(data.totalPrice) || 0);
+    }
+    if (data.notes !== undefined) {
+      sets.push('notes = ?');
+      vals.push(data.notes ?? null);
+    }
+
+    if (sets.length === 0) {
+      return { affectedRows: 0 };
+    }
+
+    const sql = `UPDATE orders SET ${sets.join(', ')} WHERE id = ?`;
+    vals.push(id);
+
+    const [result] = await db.query(sql, vals);
+    return result;
   },
 };
 

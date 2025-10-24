@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, History, RefreshCcw } from "lucide-react";
-import { Tea, CartItem, Order } from "@/lib/types";
+import { Search, History, RefreshCcw, Trash2 } from "lucide-react";
+import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
 
@@ -17,7 +17,17 @@ import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
-export default function OrdersPage() {
+// Helpers
+const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
+const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
+const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
+const getOrderDate = (o: Order) =>
+  o.createdAt ?? (typeof o.orderDate === "string" ? o.orderDate : "") ?? (o.created_at ?? "");
+const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
+const getStatus = (o: Order): OrderStatus =>
+  (o.order_status ?? o.status ?? "pending") as OrderStatus;
+
+export default function IndexPOSPage() {
   // ====== POS (kasir) state ======
   const [teas, setTeas] = useState<Tea[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -25,13 +35,23 @@ export default function OrdersPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isPaying, setIsPaying] = useState(false);
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(() =>
+    localStorage.getItem("pos_draft_orderId")
+  );
+
   // ====== Riwayat Orders state ======
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "shop" | "pos">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | Order["status"]>("all");
+  const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [customerName, setCustomerName] = useState<string>("");
+  const [cartNotes, setCartNotes] = useState<string>("");
+  const [cartExtra, setCartExtra] = useState<number>(0);
 
   // ====== Helpers ======
   const fmtIDR = (v: number) =>
@@ -64,10 +84,17 @@ export default function OrdersPage() {
     })();
   }, []);
 
-  const debouncedSearch = useMemo(() => debounce((term: string) => setSearchTerm(term), 300), []);
-  const filtered = useMemo(() => filterTeas(teas, searchTerm, selectedCategory), [teas, searchTerm, selectedCategory]);
+  const debouncedSearch = useMemo(
+    () => debounce((term: string) => setSearchTerm(term), 300),
+    []
+  );
 
-  // ====== Cart handlers (POS) ======
+  const filtered = useMemo(
+    () => filterTeas(teas, searchTerm, selectedCategory),
+    [teas, searchTerm, selectedCategory]
+  );
+
+  // ====== Cart handlers ======
   const handleAdd = (item: Tea) => {
     setCartItems((prev) => {
       const found = prev.find((i) => i.tea.id === item.id);
@@ -76,39 +103,105 @@ export default function OrdersPage() {
           toast.error("Stok tidak mencukupi");
           return prev;
         }
-        return prev.map((i) => (i.tea.id === item.id ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map((i) =>
+          i.tea.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
       }
       return [...prev, { tea: item, quantity: 1 }];
     });
   };
 
   const handleUpdateQty = (id: string, qty: number) =>
-    setCartItems((prev) => prev.map((i) => (i.tea.id === id ? { ...i, quantity: qty } : i)));
+    setCartItems((prev) =>
+      prev.map((i) => (i.tea.id === id ? { ...i, quantity: qty } : i))
+    );
 
-  const handleRemove = (id: string) => setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
+  const handleRemove = (id: string) =>
+    setCartItems((prev) => prev.filter((i) => i.tea.id !== id));
   const handleClear = () => setCartItems([]);
 
-  const handleSave = () => {
-    localStorage.setItem("pos_draft", JSON.stringify(cartItems));
-    toast.success("Draft pesanan disimpan");
+  // ====== Ambil order dari riwayat ======
+  const loadOrderFromHistory = (o: Order) => {
+    const idStr = String(o.id);
+    setDraftOrderId(idStr);
+    localStorage.setItem("pos_draft_orderId", idStr);
+
+    setCustomerName(getCustomerName(o));
+    setCartNotes(getNotes(o));
+    setCartExtra(getExtra(o));
+
+    const items: CartItem[] = (o.items ?? []).map((it) => ({
+      tea: {
+        id: String(it.productId ?? it.tea?.id ?? ""),
+        name: it.nama_produk ?? it.tea?.name ?? "Produk",
+        description: it.tea?.description ?? "",
+        price: Number(it.harga ?? it.tea?.price ?? 0),
+        image: it.tea?.image ?? "",
+        category: (it.tea?.category as Tea["category"]) ?? "green",
+        stock: it.tea?.stock ?? 999,
+        isAvailable: true,
+      },
+      quantity: Number(it.quantity ?? it.qty ?? 1),
+    }));
+
+    setCartItems(items);
+    toast.success(`Order #${idStr} (${getCustomerName(o)}) dimuat ke keranjang`);
   };
 
-  // ====== POS bayar → createOrder(source="pos") ======
-  const handlePay = async ({ total, extra, notes }: { total: number; extra: number; notes?: string }) => {
+  // ====== Proses pembayaran ======
+  const handlePay = async ({
+    total,
+    extra,
+    notes,
+    customerName,
+  }: {
+    total: number;
+    extra: number;
+    notes?: string;
+    customerName?: string;
+  }) => {
+    const name = (customerName || "").trim() || "Walk-in";
+    setIsPaying(true);
     try {
-      await api.createOrder({
-        items: cartItems,
-        customerName: "Walk-in",
-        notes,
-        source: "pos",
-        extra,
-      });
-      toast.success(`Pembayaran berhasil. Total ${fmtIDR(total)}`);
-      setCartItems([]);
+      let orderId = draftOrderId;
 
+      if (!orderId) {
+        const created = await api.createOrder({
+          items: cartItems,
+          customerName: name,
+          notes: notes ?? "",
+          source: "pos",
+          extra: extra ?? 0,
+        });
+        const oid = api.getOrderIdFromCreate(created);
+        if (!oid) throw new Error("Gagal dapat orderId dari createOrder");
+        orderId = String(oid);
+      } else {
+        await api.updateOrder(orderId, {
+          customerName: name,
+          notes: notes ?? "",
+          extra: extra ?? 0,
+          items: cartItems,
+        });
+      }
+
+      await api.createPayment(orderId, {
+        paymentMethod: "cash",
+        amount: total,
+      });
+      await api.updateOrderStatus(orderId, "paid");
+
+      toast.success(`💰 Pembayaran berhasil untuk ${name}`);
+      setCartItems([]);
+      setDraftOrderId(null);
+      localStorage.removeItem("pos_draft_orderId");
+      setCustomerName("");
       if (isHistoryOpen) void loadOrders();
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast.error("Gagal memproses pembayaran");
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -117,7 +210,6 @@ export default function OrdersPage() {
     setIsLoadingOrders(true);
     try {
       const list = await api.getOrders();
-      console.log("DEBUG: Orders loaded:", list);
       setOrders(list);
     } catch (e) {
       console.error("Gagal load orders:", e);
@@ -127,40 +219,75 @@ export default function OrdersPage() {
     }
   };
 
-  // saat dialog dibuka → muat data
   useEffect(() => {
     if (isHistoryOpen) void loadOrders();
   }, [isHistoryOpen]);
 
   const filteredOrders = useMemo(() => {
     return orders
-      .filter((o) => (sourceFilter === "all" ? true : o.source === sourceFilter))
-      .filter((o) => (statusFilter === "all" ? true : o.status === statusFilter))
+      .filter((o) =>
+        sourceFilter === "all" ? true : o.source === sourceFilter
+      )
+      .filter((o) =>
+        statusFilter === "all" ? true : getStatus(o) === statusFilter
+      )
       .filter((o) =>
         orderSearch.trim()
-          ? o.customerName.toLowerCase().includes(orderSearch.trim().toLowerCase())
+          ? getCustomerName(o)
+              .toLowerCase()
+              .includes(orderSearch.trim().toLowerCase())
           : true
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
 
-  const updateStatus = async (orderId: string, status: Order["status"]) => {
+  const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
       await api.updateOrderStatus(orderId, status);
-      setOrders((prev) => prev.map((o) => (String(o.id) === orderId ? { ...o, status } : o)));
+      setOrders((prev) =>
+        prev.map((o) => (String(o.id) === orderId ? { ...o, status } : o))
+      );
       toast.success("Status diperbarui");
     } catch {
       toast.error("Gagal memperbarui status");
     }
   };
 
+  // ✅ Hapus order dari dialog Riwayat
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm(`Yakin hapus order #${orderId}?`)) return;
+    try {
+      setDeletingId(orderId);
+      await api.deleteOrder(orderId);
+      setOrders((prev) => prev.filter((o) => String(o.id) !== orderId));
+      if (draftOrderId === orderId) {
+        setDraftOrderId(null);
+        localStorage.removeItem("pos_draft_orderId");
+        setCartItems([]);
+        setCustomerName("");
+        setCartNotes("");
+        setCartExtra(0);
+      }
+      toast.success(`Order #${orderId} dihapus`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Gagal menghapus order");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // ====== UI ======
   if (isLoading)
-    return <div className="p-6 text-center text-muted-foreground">Memuat menu…</div>;
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Memuat menu…
+      </div>
+    );
 
   return (
     <div className="min-h-screen px-4 py-6">
       <div className="max-w-[1400px] mx-auto">
-        {/* Header Aksi Riwayat */}
+        {/* Header & Dialog Riwayat */}
         <div className="mb-4 flex items-center justify-between">
           <div className="text-xl font-semibold">Kasir</div>
 
@@ -180,9 +307,8 @@ export default function OrdersPage() {
                 </DialogTitle>
               </DialogHeader>
 
-              {/* Toolbar Filter & Search */}
+              {/* Toolbar Filter */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                {/* Search */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
@@ -193,29 +319,17 @@ export default function OrdersPage() {
                   />
                 </div>
 
-                {/* Filter Source */}
-                <Select value={sourceFilter} onValueChange={(v: "all" | "shop" | "pos") => setSourceFilter(v)}>
-                  <SelectTrigger className="w-full sm:w-40">
-                    <SelectValue placeholder="Sumber" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Sumber</SelectItem>
-                    <SelectItem value="shop">Shop</SelectItem>
-                    <SelectItem value="pos">POS</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Filter Status */}
-                <Select value={statusFilter} onValueChange={(v: "all" | Order["status"]) => setStatusFilter(v)}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v: "all" | OrderStatus) => setStatusFilter(v)}
+                >
                   <SelectTrigger className="w-full sm:w-44">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="preparing">Preparing</SelectItem>
-                    <SelectItem value="ready">Ready</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -238,98 +352,105 @@ export default function OrdersPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-  {filteredOrders.map((o) => {
-    const customerName = o.customer_name || o.customerName || "Tidak diketahui";
-    const orderDate = o.createdAt
-      ? fmtTime(o.createdAt)
-      : o.orderDate
-      ? fmtTime(o.orderDate)
-      : "-";
-    const total = Number(o.totalPrice ?? o.total ?? 0);
+                    {filteredOrders.map((o) => {
+                      const name = getCustomerName(o);
+                      const orderDateStr = getOrderDate(o);
+                      const orderDate = orderDateStr ? fmtTime(orderDateStr) : "-";
+                      const total = getTotal(o);
+                      const notes = getNotes(o);
+                      const status = getStatus(o);
 
-    return (
-      <Card key={o.id} className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          {/* Kiri: Info Order */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-medium truncate">{customerName}</span>
-              <Badge variant="secondary" className="capitalize">
-                {o.source ?? "shop"}
-              </Badge>
-            </div>
+                      return (
+                        <Card key={o.id} className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate">{name}</span>
+                                <Badge variant="secondary" className="capitalize">
+                                  {o.source ?? "pos"}
+                                </Badge>
+                              </div>
 
-            <div className="text-xs text-muted-foreground">
-              {orderDate} • {o.items?.length || 0} item
-            </div>
+                              <div className="text-xs text-muted-foreground">
+                                {orderDate} • {(o.items?.length ?? 0)} item
+                              </div>
 
-            <div className="mt-2 text-sm">
-              {Array.isArray(o.items) && o.items.length > 0 ? (
-  o.items.slice(0, 3).map((it, i) => (
-    <span key={i} className="mr-2 flex items-center gap-2">
-      <span>
-        {(it.tea?.name || it.nama_produk || "Produk tidak diketahui")} ×{" "}
-        {(it.quantity || it.qty || 0)}
-      </span>
-      <Button
-        size="icon"
-        variant="outline"
-        className="h-6 w-6"
-        onClick={() => handleAdd({
-  id: it.productId || it.tea?.id || "",
-  name: it.nama_produk || it.tea?.name || "Produk tidak diketahui",
-  description: it.tea?.description || "",
-  price: it.harga || it.tea?.price || 0,
-  stock: it.tea?.stock || 99,
-  isAvailable: true,
-  image: it.tea?.image || "/placeholder.png", // ✅ default gambar
-  category: it.tea?.category || "black", // ✅ default kategori
-})}
+                              <div className="mt-2 text-sm">
+                                {Array.isArray(o.items) && o.items.length > 0 ? (
+                                  o.items.slice(0, 3).map((it, i) => (
+                                    <div key={i}>
+                                      {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                                      {it.quantity ?? it.qty ?? 0}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-500 italic">
+                                    Tidak ada item
+                                  </span>
+                                )}
+                                {(o.items?.length ?? 0) > 3 && <span>…</span>}
+                              </div>
 
-      >
-        +
-      </Button>
-    </span>
-  ))
-) : (
-  <span className="text-gray-500 italic">Tidak ada item</span>
-)}
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                <span className="font-medium">Catatan:</span>{" "}
+                                {notes ? notes : <span className="italic text-gray-400">—</span>}
+                              </div>
+                            </div>
 
-              {o.items.length > 3 && <span>…</span>}
-            </div>
-          </div>
+                            <div className="text-right">
+                              <div className="font-semibold">{fmtIDR(total)}</div>
+                              <Select
+                                value={status}
+                                onValueChange={(v: OrderStatus) =>
+                                  updateStatus(String(o.id), v)
+                                }
+                              >
+                                <SelectTrigger className="mt-2 h-8 w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="paid">Paid</SelectItem>
+                                </SelectContent>
+                              </Select>
 
-          {/* Kanan: Total dan Status */}
-          <div className="text-right">
-            <div className="font-semibold">{fmtIDR(total)}</div>
-            <Select
-              value={o.order_status || o.status || "pending"}
-              onValueChange={(v: Order["status"]) => updateStatus(String(o.id), v)}
-            >
-              <SelectTrigger className="mt-2 h-8 w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="preparing">Preparing</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
-    );
-  })}
-</div>
+                              <div className="mt-2 flex gap-2 justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    loadOrderFromHistory(o);
+                                    setIsHistoryOpen(false);
+                                  }}
+                                >
+                                  Gunakan order ini
+                                </Button>
 
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() => handleDeleteOrder(String(o.id))}
+                                  disabled={deletingId === String(o.id)}
+                                  title="Hapus order ini"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 )}
               </ScrollArea>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Search & Kategori (POS) */}
+        {/* Search & Kategori */}
         <div className="mb-4 flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -375,8 +496,14 @@ export default function OrdersPage() {
               onUpdateQuantity={handleUpdateQty}
               onRemoveItem={handleRemove}
               onClearCart={handleClear}
-              onSave={handleSave}
               onPay={handlePay}
+              isPaying={isPaying}
+              customerName={customerName}
+              onChangeCustomerName={setCustomerName}
+              notesValue={cartNotes}
+              onChangeNotes={setCartNotes}
+              extraValue={cartExtra}
+              onChangeExtra={setCartExtra}
             />
           </div>
         </div>

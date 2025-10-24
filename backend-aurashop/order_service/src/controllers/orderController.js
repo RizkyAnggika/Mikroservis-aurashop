@@ -1,15 +1,16 @@
 // 📁 controllers/orderController.js
 const Order = require('../models/orderModel');
-const Payment = require('../models/paymentModel'); // untuk invoice
+// const Payment = require('../models/paymentModel'); // untuk invoice
 const inventoryService = require('../services/inventoryService');
 const HttpError = require('../utils/HttpError');
+const axios = require('axios'); // Tambahkan di paling atas file orderController.js
 
 // ===============================
 // 🟢 Buat pesanan baru
 // ===============================
 exports.createOrder = async (req, res, next) => {
   try {
-    const { userId, customer_name, items, totalPrice, note, order_status } = req.body;
+    const { userId, customer_name, items, totalPrice, notes, order_status } = req.body;
 
     // Ganti jadi
 if (!customer_name || !Array.isArray(items) || items.length === 0) {
@@ -53,7 +54,7 @@ if (!customer_name || !Array.isArray(items) || items.length === 0) {
       customer_name,
       items: detailedItems,
       totalPrice: finalTotalPrice,
-      note: note || null,
+      notes: (notes && String(notes).trim()) || null, // ⬅️ notes
       order_status: order_status || 'pending',
     });
 
@@ -65,9 +66,77 @@ if (!customer_name || !Array.isArray(items) || items.length === 0) {
         customer_name,
         items: detailedItems,
         totalPrice: finalTotalPrice,
-        note: note || null,
+        notes: (notes && String(notes).trim()) || null,
         order_status: order_status || 'pending',
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { customer_name, items, notes, totalPrice, extra } = req.body;
+
+    // Pastikan order ada
+    const existing = await Order.findById(id);
+    if (!existing) throw new HttpError('Pesanan tidak ditemukan', 404);
+
+    // Siapkan nilai default dari data lama
+    let detailedItems = [];
+    let finalTotal = Number(existing.totalPrice) || 0;
+
+    // Jika client mengirim items, hitung ulang persis seperti createOrder
+    if (Array.isArray(items) && items.length > 0) {
+      detailedItems = [];
+      finalTotal = 0;
+
+      for (const item of items) {
+        const productId = item.productId || item.product_id;
+        const qty = Number(item.qty ?? item.quantity ?? 1);
+        if (!productId || !qty) {
+          throw new HttpError('Setiap item harus punya productId dan qty', 400);
+        }
+
+        const product = await inventoryService.getProductById(productId);
+        if (!product || !product.id) {
+          throw new HttpError(`Produk dengan ID ${productId} tidak ditemukan`, 404);
+        }
+
+        const harga = Number(product.harga) || 0;
+        const subtotal = harga * qty;
+        finalTotal += subtotal;
+
+        detailedItems.push({
+          productId: product.id,
+          nama_produk: product.nama_produk,
+          harga,
+          quantity: qty,
+          subtotal,
+        });
+      }
+
+      // biaya tambahan (jika dikirim dari POS)
+      if (extra) finalTotal += Number(extra) || 0;
+    } else {
+      // kalau items tidak dikirim, gunakan items lama
+      detailedItems = JSON.parse(existing.items || '[]');
+    }
+
+    const payload = {
+      customer_name: customer_name ?? existing.customer_name,
+      items: detailedItems,
+      totalPrice: totalPrice ?? finalTotal,
+      notes: (notes && String(notes).trim()) || null,
+    };
+
+    await Order.update(id, payload);
+
+    res.status(200).json({
+      message: '✅ Pesanan berhasil diperbarui',
+      data: { id, ...payload },
     });
   } catch (error) {
     next(error);
@@ -121,21 +190,26 @@ exports.getInvoiceByOrderId = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // 🔹 Ambil data order dari DB
     const order = await Order.findById(id);
     if (!order) throw new HttpError('Pesanan tidak ditemukan', 404);
 
     order.items = JSON.parse(order.items || '[]');
-    const payment = await Payment.findByOrderId(id);
+
+    // 🔹 Ambil data payment dari kasir_service (via HTTP)
+    const paymentResponse = await axios.get(`http://localhost:4002/api/orders/${id}/payments`);
+    const payment = paymentResponse.data?.data || [];
 
     res.status(200).json({
       message: '🧾 Invoice berhasil diambil',
       data: {
         order,
-        payment: payment || { message: 'Belum ada pembayaran untuk pesanan ini' },
+        payment: payment.length ? payment : { message: 'Belum ada pembayaran untuk pesanan ini' },
       },
     });
   } catch (error) {
-    next(error);
+    console.error('Invoice error:', error.message);
+    next(new HttpError('Gagal mengambil invoice, coba lagi nanti', 500));
   }
 };
 

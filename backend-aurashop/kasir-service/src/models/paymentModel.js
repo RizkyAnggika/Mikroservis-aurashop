@@ -1,5 +1,5 @@
 // 📁 models/paymentModel.js
-const db = require('../config/db'); // pool.promise()
+const db = require('../../../order_service/src/config/db'); // pool.promise()
 
 const Payment = {
   // 🧩 Simpan data pembayaran

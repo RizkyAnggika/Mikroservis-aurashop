@@ -1,3 +1,4 @@
+// ✅ src/lib/types.ts
 export interface Tea {
   id: string;
   name: string;
@@ -10,32 +11,55 @@ export interface Tea {
 }
 
 export interface CartItem {
+  // frontend-typed
   tea?: Tea;
-  productId?: string;
+  // backend variants
+  productId?: string | number;
   nama_produk?: string;
   harga?: number;
+  // qty variants
   quantity: number;
   qty?: number;
+  // (opsional) subtotal dari backend
+  subtotal?: number;
 }
 
+export type OrderStatus = 'pending' | 'paid';
 
+// Biarkan fleksibel—karena backend kamu punya beberapa alias nama field
 export interface Order {
-  id: string;
-  userId?: string;
-  customer_name: string;
-  customerName?: string; // alias frontend
-  items: CartItem[];
-  totalPrice: number;
-  total?: number; // ✅ alias untuk total
-  note?: string | null;
-  order_status: string;
-  status?: string; // ✅ alias frontend
-  clientId?: string; // ✅ tambahkan ini
-  source?: "shop" | "pos";
-  createdAt?: string;
-  orderDate?: Date | string; // ✅ untuk tampilan frontend
-}
+  id: string | number;
 
+  // customer name variants
+  customer_name?: string;
+  customerName?: string;
+
+  items: CartItem[];
+
+  // total variants
+  totalPrice?: number;
+  total?: number;
+
+  // notes variants
+  notes?: string | null;
+  note?: string | null;
+
+  // status variants
+  order_status?: OrderStatus;
+  status?: OrderStatus;
+
+  // extra fee variants
+  extra?: number;
+  additionalFee?: number;
+
+  // misc
+  userId?: string | number;
+  clientId?: string | number;
+  source?: 'shop' | 'pos';
+  createdAt?: string;
+  created_at?: string;
+  orderDate?: string | Date;
+}
 
 export interface User {
   id: string;

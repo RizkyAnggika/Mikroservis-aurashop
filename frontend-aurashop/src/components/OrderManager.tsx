@@ -1,7 +1,8 @@
 // src/pages/orders/OrderManager.tsx
 import { useState, useEffect } from "react";
-import { Order } from "@/lib/types";
+import { Order, CartItem } from "@/lib/types";
 import { formatIDR } from "@/lib/utils";
+
 import {
   Card,
   CardContent,
@@ -27,17 +28,73 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Receipt,
-  Clock,
-  ChefHat,
-  CheckCircle,
-  Package,
-  DollarSign,
-} from "lucide-react";
+import { Receipt, Clock, DollarSign, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+// ---------- Types (tanpa any) ----------
+type LegacyOrderFields = Partial<{
+  total: number;        // beberapa payload pakai "total"
+  created_at: string;   // beberapa payload pakai "created_at"
+  customerName: string; // alias FE lama
+}>;
+
+type AnyOrder = Order & LegacyOrderFields;
+
+// Status UI yang dipakai halaman ini: hanya 2
+type UIStatus = "pending" | "paid";
+
+// ---------- Small helpers ----------
+const getIdStr = (o: Pick<Order, "id">) => String(o.id);
+
+const getCustomerName = (o: AnyOrder) =>
+  o.customer_name ?? o.customerName ?? "Walk-in";
+
+const mapToUIStatus = (o: AnyOrder): UIStatus => {
+  const raw = (o.order_status ?? o.status ?? "pending").toString().toLowerCase();
+  // peta alias BE → UIStatus
+  if (
+    raw === "paid" ||
+    raw === "success" ||
+    raw === "completed" ||
+    raw === "payment_success" ||
+    raw === "payed"
+  ) {
+    return "paid";
+  }
+  return "pending";
+};
+
+const getTotal = (o: AnyOrder) => Number(o.totalPrice ?? o.total ?? 0);
+
+const getOrderDate = (o: AnyOrder) => {
+  const raw =
+    o.createdAt ??
+    (typeof o.orderDate === "string" ? o.orderDate : undefined) ??
+    o.created_at;
+  return raw ? new Date(raw) : null;
+};
+
+const itemLabel = (it: CartItem) => {
+  const name = it.tea?.name ?? it.nama_produk ?? "Produk";
+  const qty = it.quantity ?? it.qty ?? 0;
+  return `${qty}× ${name}`;
+};
+
+// ---------- UI helpers ----------
+const getStatusBadgeVariant = (status: UIStatus) =>
+  status === "paid" ? "default" : "secondary";
+
+const getStatusText = (status: UIStatus) =>
+  status === "paid" ? "Terbayar" : "Menunggu";
+
+const getStatusIcon = (status: UIStatus) =>
+  status === "paid" ? <DollarSign className="w-4 h-4" /> : <Clock className="w-4 h-4" />;
+
+const getNextStatus = (status: UIStatus): UIStatus | null =>
+  status === "pending" ? "paid" : null;
+
+// ---------- Component ----------
 interface OrderManagerProps {
   onOrderUpdated?: () => void;
 }
@@ -45,16 +102,15 @@ interface OrderManagerProps {
 export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<Order["status"] | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<UIStatus | "all">("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrders();
-    // 🔁 Auto-refresh tiap 10 detik
     const interval = setInterval(() => loadOrders(), 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ Ambil semua order dari localStorage (tanpa clientId)
   const loadOrders = async () => {
     try {
       const data = await api.getOrders();
@@ -67,10 +123,20 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
     }
   };
 
-  const handleStatusUpdate = async (orderId: string, newStatus: Order["status"]) => {
+  const handleStatusUpdate = async (
+    orderId: string | number,
+    newStatus: UIStatus
+  ) => {
     try {
-      await api.updateOrderStatus(orderId, newStatus);
-      await loadOrders();
+      await api.updateOrderStatus(String(orderId), newStatus);
+      // refresh ringan (tanpa request penuh) bisa juga:
+      setOrders((prev) =>
+        prev.map((o) =>
+          String(o.id) === String(orderId)
+            ? ({ ...o, order_status: newStatus } as Order)
+            : o
+        )
+      );
       onOrderUpdated?.();
       toast.success("Status pesanan berhasil diperbarui");
     } catch (error) {
@@ -79,88 +145,41 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
     }
   };
 
-  const getStatusBadgeVariant = (status: Order["status"]) => {
-    switch (status) {
-      case "pending":
-        return "secondary";
-      case "preparing":
-        return "default";
-      case "ready":
-        return "destructive";
-      case "completed":
-        return "outline";
-      default:
-        return "secondary";
+  const handleDeleteOrder = async (orderId: string | number) => {
+    const idStr = String(orderId);
+    if (!confirm(`Yakin menghapus order #${idStr}? Aksi ini tidak bisa dibatalkan.`)) return;
+
+    try {
+      setDeletingId(idStr);
+      await api.deleteOrder(idStr); // DELETE /api/orders/:id
+      // hapus dari state tanpa full reload
+      setOrders((prev) => prev.filter((o) => String(o.id) !== idStr));
+      onOrderUpdated?.();
+      toast.success(`Order #${idStr} dihapus`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal menghapus order");
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const getStatusText = (status: Order["status"]) => {
-    switch (status) {
-      case "pending":
-        return "Menunggu";
-      case "preparing":
-        return "Diproses";
-      case "ready":
-        return "Siap";
-      case "completed":
-        return "Selesai";
-      default:
-        return status;
-    }
-  };
-
-  const getStatusIcon = (status: Order["status"]) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="w-4 h-4" />;
-      case "preparing":
-        return <ChefHat className="w-4 h-4" />;
-      case "ready":
-        return <Package className="w-4 h-4" />;
-      case "completed":
-        return <CheckCircle className="w-4 h-4" />;
-      default:
-        return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const getNextStatus = (status: Order["status"]): Order["status"] | null => {
-    switch (status) {
-      case "pending":
-        return "preparing";
-      case "preparing":
-        return "ready";
-      case "ready":
-        return "completed";
-      default:
-        return null;
-    }
-  };
-
-  const getNextStatusText = (status: Order["status"]) => {
-    const next = getNextStatus(status);
-    return next ? getStatusText(next) : "";
-  };
-
-  // 🔍 Filter pesanan berdasarkan status
   const filteredOrders =
     statusFilter === "all"
       ? orders
-      : orders.filter((o) => o.status === statusFilter);
+      : orders.filter((o) => mapToUIStatus(o as AnyOrder) === statusFilter);
 
-  // 📊 Statistik
-  const pendingOrders = orders.filter((o) => o.status === "pending").length;
-  const preparingOrders = orders.filter((o) => o.status === "preparing").length;
-  const readyOrders = orders.filter((o) => o.status === "ready").length;
+  // Statistik
+  const pendingOrders = orders.filter((o) => mapToUIStatus(o as AnyOrder) === "pending").length;
+  const paidOrders    = orders.filter((o) => mapToUIStatus(o as AnyOrder) === "paid").length;
+
   const todayRevenue = orders
-    .filter(
-      (o) =>
-        new Date(o.orderDate).toDateString() === new Date().toDateString() &&
-        o.status === "completed"
-    )
-    .reduce((sum, o) => sum + o.total, 0);
+    .filter((o) => {
+      const d = getOrderDate(o as AnyOrder);
+      return d && d.toDateString() === new Date().toDateString() && mapToUIStatus(o as AnyOrder) === "paid";
+    })
+    .reduce((sum, o) => sum + getTotal(o as AnyOrder), 0);
 
-  // 🌀 Loading
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -183,7 +202,7 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
         </div>
         <Select
           value={statusFilter}
-          onValueChange={(v: Order["status"] | "all") => setStatusFilter(v)}
+          onValueChange={(v: UIStatus | "all") => setStatusFilter(v)}
         >
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Filter status" />
@@ -191,15 +210,13 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
           <SelectContent>
             <SelectItem value="all">Semua</SelectItem>
             <SelectItem value="pending">Menunggu</SelectItem>
-            <SelectItem value="preparing">Diproses</SelectItem>
-            <SelectItem value="ready">Siap</SelectItem>
-            <SelectItem value="completed">Selesai</SelectItem>
+            <SelectItem value="paid">Terbayar</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Statistik */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row justify-between pb-2">
             <CardTitle className="text-sm font-medium">Menunggu</CardTitle>
@@ -212,21 +229,11 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
 
         <Card>
           <CardHeader className="flex flex-row justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Diproses</CardTitle>
-            <ChefHat className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Terbayar</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{preparingOrders}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Siap</CardTitle>
-            <Package className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{readyOrders}</div>
+            <div className="text-2xl font-bold text-green-700">{paidOrders}</div>
           </CardContent>
         </Card>
 
@@ -271,51 +278,68 @@ export default function OrderManager({ onOrderUpdated }: OrderManagerProps) {
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.map((o) => {
-                    const next = getNextStatus(o.status);
+                    const ao = o as AnyOrder;
+                    const status = mapToUIStatus(ao);
+                    const next = getNextStatus(status);
+                    const when = getOrderDate(ao);
                     return (
-                      <TableRow key={o.id}>
+                      <TableRow key={getIdStr(o)}>
                         <TableCell>
-                          <code className="text-sm">{o.id}</code>
+                          <code className="text-sm">{getIdStr(o)}</code>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">{o.customerName}</div>
+                          <div className="font-medium">{getCustomerName(ao)}</div>
                         </TableCell>
                         <TableCell>
                           <ScrollArea className="max-h-20 w-48">
-                            {o.items.map((it, i) => (
+                            {(o.items ?? []).map((it, i) => (
                               <div key={i} className="text-sm">
-                                {it.quantity}× {it.tea.name}
+                                {itemLabel(it)}
                               </div>
                             ))}
                           </ScrollArea>
                         </TableCell>
                         <TableCell className="text-green-700 font-semibold">
-                          {formatIDR(o.total)}
+                          {formatIDR(getTotal(ao))}
                         </TableCell>
                         <TableCell>
                           <Badge
-                            variant={getStatusBadgeVariant(o.status)}
+                            variant={getStatusBadgeVariant(status)}
                             className="flex items-center gap-1 w-fit"
                           >
-                            {getStatusIcon(o.status)}
-                            {getStatusText(o.status)}
+                            {getStatusIcon(status)}
+                            {getStatusText(status)}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(o.orderDate).toLocaleString("id-ID")}
+                          {when ? when.toLocaleString("id-ID") : "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {next && (
+                          <div className="flex justify-end gap-2">
+                            {next && status === "pending" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleStatusUpdate(o.id, "paid")}
+                                variant="default"
+                                className="flex items-center gap-1"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                                Tandai Terbayar
+                              </Button>
+                            )}
+
                             <Button
                               size="sm"
-                              onClick={() => handleStatusUpdate(o.id, next)}
-                              variant={o.status === "ready" ? "default" : "outline"}
+                              variant="destructive"
                               className="flex items-center gap-1"
+                              onClick={() => handleDeleteOrder(o.id)}
+                              disabled={deletingId === String(o.id)}
+                              title="Hapus order ini"
                             >
-                              {getStatusIcon(next)}
-                              {getNextStatusText(o.status)}
+                              <Trash2 className="w-4 h-4" />
+                              {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
                             </Button>
-                          )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
