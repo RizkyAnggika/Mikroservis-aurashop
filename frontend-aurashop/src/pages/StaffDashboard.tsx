@@ -75,6 +75,7 @@ export default function IndexPOSPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoadingPayments] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
+  const [paymentSearch, setPaymentSearch] = useState("");
   const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
   const [statusFilter] = useState<"all" | OrderStatus>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -252,40 +253,18 @@ export default function IndexPOSPage() {
   };
 
   const loadOrdersAndPayments = async () => {
-  try {
-    const [orderList, paymentList] = await Promise.all([
-      api.getOrders(),
-      api.getPayments()
-    ]);
-    setOrders(orderList);
-    setPayments(paymentList);
-  } catch (e) {
-    console.error("Gagal memuat riwayat:", e);
-    toast.error("Gagal memuat riwayat pembayaran atau order");
-  }
-};
-
-
-
-  // useEffect(() => {
-  //   (async () => {
-  //     try {
-  //       const data = await api.getPayments();
-  //       if (Array.isArray(data)) {
-  //         setPayments(data);
-  //       } else {
-  //         console.error("Data payments bukan array:", data);
-  //         setPayments([]); // fallback agar tidak error
-  //       }
-  //     } catch (e) {
-  //       console.error(e);
-  //       toast.error("Gagal memuat data pembayaran");
-  //     } finally {
-  //       setIsLoading(false);
-  //     }
-  //   })();
-  // }, []);
-
+    try {
+      const [orderList, paymentList] = await Promise.all([
+        api.getOrders(),
+        api.getPayments()
+      ]);
+      setOrders(orderList);
+      setPayments(paymentList);
+    } catch (e) {
+      console.error("Gagal memuat riwayat:", e);
+      toast.error("Gagal memuat riwayat pembayaran atau order");
+    }
+  };
 
   useEffect(() => {
     if (isHistoryOpen) void loadOrders();
@@ -321,6 +300,27 @@ useEffect(() => {
           : true
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
+
+  const filteredPayments = useMemo(() => {
+    const term = paymentSearch.trim().toLowerCase();
+    if (!term) return payments;
+
+    return payments.filter((p) => {
+      const orderInfo = orders.find(order => String(order.id) === String(p.orderId));
+      const customer = orderInfo?.customer_name?.toLowerCase() ?? "";
+      const method = p.paymentMethod?.toLowerCase() ?? "";
+      const status = p.status?.toLowerCase() ?? "";
+      const idStr = String(p.id);
+
+      return (
+        customer.includes(term) ||
+        method.includes(term) ||
+        status.includes(term) ||
+        idStr.includes(term)
+      );
+    });
+  }, [payments, orders, paymentSearch]);
+
 
   const handleDeleteOrder = async (orderId: string) => {
     if (!confirm(`Yakin hapus order #${orderId}?`)) return;
@@ -535,8 +535,8 @@ useEffect(() => {
                     <Input
                       placeholder="Cari nama pelanggan…"
                       className="pl-9"
-                      value={orderSearch}
-                      onChange={(e) => setOrderSearch(e.target.value)}
+                      value={paymentSearch}
+                      onChange={(e) => setPaymentSearch(e.target.value)}
                     />
                   </div>
 
@@ -559,7 +559,7 @@ useEffect(() => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {payments.map((p) => {
+                      {filteredPayments.map((p) => {
                         const orderInfo = orders.find(order => String(order.id) === String(p.orderId));
 
                         return (
