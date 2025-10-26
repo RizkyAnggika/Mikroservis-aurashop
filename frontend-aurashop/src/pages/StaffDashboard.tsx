@@ -69,6 +69,7 @@ export default function IndexPOSPage() {
 
   // ====== Riwayat Orders state ======
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
@@ -252,6 +253,15 @@ export default function IndexPOSPage() {
     if (isHistoryOpen) void loadOrders();
   }, [isHistoryOpen]);
 
+  useEffect(() => {
+  if (isHistoryOpen) void loadOrders();
+}, [isHistoryOpen]);
+
+useEffect(() => {
+  if (isPaymentOpen) void loadOrders();
+}, [isPaymentOpen]);
+
+
   const filteredOrders = useMemo(() => {
   return orders
     .filter((o) =>
@@ -259,7 +269,7 @@ export default function IndexPOSPage() {
     )
     .filter((o) => {
       const currentStatus = getStatus(o);
-      // Jika statusFilter = "all", tampilkan hanya yang pending
+  
       if (statusFilter === "all") {
         return currentStatus === "pending";
       }
@@ -273,6 +283,16 @@ export default function IndexPOSPage() {
         : true
     );
 }, [orders, sourceFilter, statusFilter, orderSearch]);
+
+const paidOrders = useMemo(() => {
+  return orders
+    .filter((o) => getStatus(o) === "paid")
+    .filter((o) =>
+      orderSearch.trim()
+        ? getCustomerName(o).toLowerCase().includes(orderSearch.trim().toLowerCase())
+        : true
+    );
+}, [orders, orderSearch]);
 
  const openPaymentHistory = async (orderId: string) => {
    try {
@@ -385,7 +405,7 @@ export default function IndexPOSPage() {
                         const total = getTotal(o);
                         const notes = getNotes(o);
                         const status = getStatus(o);
-                        const isPaid = String(status).toLowerCase()
+                        const isPaid = String(status).toLowerCase() === "paid";
 
                         return (
                           <Card key={o.id} className="p-4">
@@ -468,7 +488,7 @@ export default function IndexPOSPage() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+            <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
               <DialogTrigger asChild>
                 <Button variant="secondary" className="gap-2 bg-black hover:bg-gray-700 text-white">
                   <CreditCard className="w-4 h-4" />
@@ -479,7 +499,7 @@ export default function IndexPOSPage() {
               <DialogContent className="max-w-3xl sm:max-w-4xl">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    <History className="w-5 h-5" />
+                    <CreditCard className="w-5 h-5" />
                     Payment
                   </DialogTitle>
                 </DialogHeader>
@@ -509,20 +529,20 @@ export default function IndexPOSPage() {
 
                 {/* List Orders */}
                 <ScrollArea className="h-[55vh] mt-4">
-                  {filteredOrders.length === 0 ? (
+                  {paidOrders.length === 0 ? (
                     <div className="text-center text-sm text-muted-foreground py-10">
                       {isLoadingOrders ? "Memuat riwayat…" : "Belum ada order."}
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {filteredOrders.map((o) => {
+                      {paidOrders.map((o) => {
                         const name = getCustomerName(o);
                         const displayISO = getDisplayTimeISO(o);
                         const displayTime = displayISO ? fmtTime(displayISO) : "-";
                         const total = getTotal(o);
                         const notes = getNotes(o);
                         const status = getStatus(o);
-                        const isPaid = String(status).toLowerCase()
+                        const isPaid = String(status).toLowerCase() === "paid";
 
                         return (
                           <Card key={o.id} className="p-4">
@@ -573,13 +593,12 @@ export default function IndexPOSPage() {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => {
-                                        loadOrderFromHistory(o);
-                                        setIsHistoryOpen(false);
-                                      }}
+                                      disabled
+                                      title="Order sudah dibayar"
                                     >
                                       Gunakan order ini
                                     </Button>
+
                                   </div>
 
                                   <Button
@@ -639,7 +658,7 @@ export default function IndexPOSPage() {
           <div className="lg:col-span-8">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((item) => (
-                <POSMenuCard
+                <POSMenuCard  
                   key={item.id}
                   item={item}
                   isSelected={!!cartItems.find((ci) => ci.tea.id === item.id)}
