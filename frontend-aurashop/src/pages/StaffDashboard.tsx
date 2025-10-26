@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, History, RefreshCcw, Trash2, CreditCard } from "lucide-react";
-import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
+import { Tea, CartItem, Order, OrderStatus, Payment } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import POSMenuCard from "@/components/pos/POSMenuCard";
 import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
+import { set } from "react-hook-form";
 
 // ---------- Helpers ----------
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
@@ -72,6 +73,8 @@ export default function IndexPOSPage() {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
   const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
@@ -249,6 +252,42 @@ export default function IndexPOSPage() {
     }
   };
 
+  const loadOrdersAndPayments = async () => {
+  try {
+    const [orderList, paymentList] = await Promise.all([
+      api.getOrders(),
+      api.getPayments()
+    ]);
+    setOrders(orderList);
+    setPayments(paymentList);
+  } catch (e) {
+    console.error("Gagal memuat riwayat:", e);
+    toast.error("Gagal memuat riwayat pembayaran atau order");
+  }
+};
+
+
+
+  // useEffect(() => {
+  //   (async () => {
+  //     try {
+  //       const data = await api.getPayments();
+  //       if (Array.isArray(data)) {
+  //         setPayments(data);
+  //       } else {
+  //         console.error("Data payments bukan array:", data);
+  //         setPayments([]); // fallback agar tidak error
+  //       }
+  //     } catch (e) {
+  //       console.error(e);
+  //       toast.error("Gagal memuat data pembayaran");
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   })();
+  // }, []);
+
+
   useEffect(() => {
     if (isHistoryOpen) void loadOrders();
   }, [isHistoryOpen]);
@@ -258,31 +297,31 @@ export default function IndexPOSPage() {
 }, [isHistoryOpen]);
 
 useEffect(() => {
-  if (isPaymentOpen) void loadOrders();
+  if (isPaymentOpen) void loadOrdersAndPayments();
 }, [isPaymentOpen]);
 
 
   const filteredOrders = useMemo(() => {
-  return orders
-    .filter((o) =>
-      sourceFilter === "all" ? true : o.source === sourceFilter
-    )
-    .filter((o) => {
-      const currentStatus = getStatus(o);
-  
-      if (statusFilter === "all") {
-        return currentStatus === "pending";
-      }
-      return currentStatus === statusFilter;
-    })
-    .filter((o) =>
-      orderSearch.trim()
-        ? getCustomerName(o)
-            .toLowerCase()
-            .includes(orderSearch.trim().toLowerCase())
-        : true
-    );
-}, [orders, sourceFilter, statusFilter, orderSearch]);
+    return orders
+      .filter((o) =>
+        sourceFilter === "all" ? true : o.source === sourceFilter
+      )
+      .filter((o) => {
+        const currentStatus = getStatus(o);
+    
+        if (statusFilter === "all") {
+          return currentStatus === "pending";
+        }
+        return currentStatus === statusFilter;
+      })
+      .filter((o) =>
+        orderSearch.trim()
+          ? getCustomerName(o)
+              .toLowerCase()
+              .includes(orderSearch.trim().toLowerCase())
+          : true
+      );
+  }, [orders, sourceFilter, statusFilter, orderSearch]);
 
 const paidOrders = useMemo(() => {
   return orders
@@ -518,114 +557,97 @@ const paidOrders = useMemo(() => {
 
                   <Button
                     variant="outline"
-                    onClick={loadOrders}
-                    disabled={isLoadingOrders}
+                    onClick={loadOrdersAndPayments}
+                    disabled={isLoadingPayments}
                     className="gap-2"
                   >
                     <RefreshCcw className="w-4 h-4" />
-                    {isLoadingOrders ? "Memuat…" : "Refresh"}
+                    {isLoadingPayments ? "Memuat…" : "Refresh"}
                   </Button>
                 </div>
 
                 {/* List Orders */}
                 <ScrollArea className="h-[55vh] mt-4">
-                  {paidOrders.length === 0 ? (
+                  {Array.isArray(payments) && payments.length === 0 ? (
                     <div className="text-center text-sm text-muted-foreground py-10">
-                      {isLoadingOrders ? "Memuat riwayat…" : "Belum ada order."}
+                      {isLoadingPayments ? "Memuat riwayat…" : "Belum ada order."}
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {paidOrders.map((o) => {
-                        const name = getCustomerName(o);
-                        const displayISO = getDisplayTimeISO(o);
-                        const displayTime = displayISO ? fmtTime(displayISO) : "-";
-                        const total = getTotal(o);
-                        const notes = getNotes(o);
-                        const status = getStatus(o);
-                        const isPaid = String(status).toLowerCase() === "paid";
+                      {payments.map((p) => {
+  const orderInfo = orders.find(order => String(order.id) === String(p.orderId));
 
-                        return (
-                          <Card key={o.id} className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium truncate">{name}</span>
-                                  <Badge variant="secondary" className="capitalize">
-                                    {o.source ?? "pos"}
-                                  </Badge>
-                                </div>
+  return (
+    <Card key={p.id} className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium truncate">
+              {orderInfo ? orderInfo.customer_name : "Order tidak ditemukan"}
+            </span>
+            <Badge variant="secondary" className="capitalize">
+              {orderInfo?.source ?? "pos"}
+            </Badge>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {p.created_at} • {(orderInfo?.items?.length ?? 0)} item
+          </div>
+          <div className="mt-2 text-sm">
+            {Array.isArray(orderInfo?.items) && orderInfo.items.length > 0 ? (
+              orderInfo.items.slice(0, 3).map((it, i) => (
+                <div key={i}>
+                  {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                  {it.quantity ?? it.qty ?? 0}
+                </div>
+              ))
+            ) : (
+              <span className="text-gray-500 italic">Tidak ada item</span>
+            )}
+            {(orderInfo?.items?.length ?? 0) > 3 && <span>…</span>}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            <span className="font-medium">Catatan:</span>{" "}
+            {orderInfo?.notes ?? <span className="italic text-gray-400">—</span>}
+          </div>
+        </div>
 
-                                <div className="text-xs text-muted-foreground">
-                                  {displayTime} • {(o.items?.length ?? 0)} item
-                                </div>
+        <div className="text-right">
+          <div className="font-semibold">{fmtIDR(p.amount)}</div>
+          <div className="mt-2 flex gap-2 items-end">
+            <div className="flex flex-col gap-2 w-full"> 
+              <p className="border border-gray rounded-lg flex justify-center ">
+                {orderInfo?.order_status
+                  ? orderInfo.order_status.charAt(0).toUpperCase() + orderInfo.order_status.slice(1).toLowerCase()
+                  : ""} {p.status}
+              </p>
+              <Button variant="outline" size="sm" disabled title="Order sudah dibayar">
+                Gunakan order ini
+              </Button>
+            </div>
 
-                                <div className="mt-2 text-sm">
-                                  {Array.isArray(o.items) && o.items.length > 0 ? (
-                                    o.items.slice(0, 3).map((it, i) => (
-                                      <div key={i}>
-                                        {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
-                                        {it.quantity ?? it.qty ?? 0}
-                                      </div>
-                                    ))
-                                  ) : (
-                                    <span className="text-gray-500 italic">Tidak ada item</span>
-                                  )}
-                                  {(o.items?.length ?? 0) > 3 && <span>…</span>}
-                                </div>
-
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  <span className="font-medium">Catatan:</span>{" "}
-                                  {notes ? notes : <span className="italic text-gray-400">—</span>}
-                                </div>
-                              </div>
-
-                              <div className="text-right">
-                                <div className="font-semibold">{fmtIDR(total)}</div>
-
-                                <div className="mt-2 flex gap-2 items-end">
-                                  <div className="flex flex-col gap-2 w-full"> 
-                                    <p className="border border-gray rounded-lg flex justify-center ">
-                                      {o.order_status
-                                        ? o.order_status.charAt(0).toUpperCase() + o.order_status.slice(1).toLowerCase()
-                                        : ""}
-                                    </p>                           
-
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      disabled
-                                      title="Order sudah dibayar"
-                                    >
-                                      Gunakan order ini
-                                    </Button>
-
-                                  </div>
-
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    className="gap-1"
-                                    onClick={() => handleDeleteOrder(String(o.id))}
-                                    disabled={deletingId === String(o.id)}
-                                    title="Hapus order ini"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1"
+              onClick={() => handleDeleteOrder(String(orderInfo?.id))}
+              disabled={deletingId === String(orderInfo?.id)}
+              title="Hapus order ini"
+            >
+              <Trash2 className="w-4 h-4" />
+              {deletingId === String(orderInfo?.id) ? "Menghapus…" : "Hapus"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+})}
                     </div>
                   )}
                 </ScrollArea>
               </DialogContent>
             </Dialog>
-
           </div>
-
         </div>
 
         {/* Search & Kategori */}

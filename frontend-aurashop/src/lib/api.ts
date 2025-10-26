@@ -1,9 +1,9 @@
 import axios, { AxiosError } from "axios";
-import { Tea, Order, CartItem, OrderStatus } from "@/lib/types";
+import { Tea, Order, CartItem, OrderStatus, Payment } from "@/lib/types";
 
 const API_URL = "http://192.168.1.123:4001/api/inventory";
 const ORDER_API = "http://192.168.1.123:5001/api/orders";
-const PAYMENT_API = "http://192.168.1.123:4002/api/orders";
+const PAYMENT_API = "http://192.168.1.123:4002/api";
 
 interface BackendTea {
   id: number;
@@ -12,7 +12,7 @@ interface BackendTea {
   harga: number;
   stok: number;
   deskripsi: string;
-  gambar: string;
+  gambar: string; 
 }
 
 interface BackendOrderItem {
@@ -247,7 +247,7 @@ export const api = {
     payload: { paymentMethod: string; amount: number }
   ): Promise<unknown> {
     try {
-      const res = await axios.post(`${PAYMENT_API}/${orderId}/pay`, payload);
+      const res = await axios.post(`${PAYMENT_API}/orders/${orderId}/pay`, payload);
       return res.data;
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
@@ -259,9 +259,9 @@ export const api = {
     }
   },
 
-  async getPayments(orderId: number | string): Promise<unknown> {
-    const res = await axios.get(`${PAYMENT_API}/${orderId}/payments`);
-    return res.data;
+  async getPayments(): Promise<Payment[]> {
+    const res = await axios.get(`${PAYMENT_API}/payments`);
+    return res.data.data || [];
   },
 };
 

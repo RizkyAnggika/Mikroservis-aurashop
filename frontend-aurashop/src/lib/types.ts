@@ -48,6 +48,15 @@ export interface Order {
   payment_time?: string;
 }
 
+export interface Payment {
+  id: number;
+  orderId: number;
+  amount: number;
+  status: string;
+  paymentMethod: string;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   username: string;
