@@ -40,6 +40,12 @@ export interface Order {
   createdAt?: string;
   created_at?: string;
   orderDate?: string | Date;
+  
+  updatedAt?: string;
+  updated_at?: string;
+  paidAt?: string;
+  paid_at?: string;
+  payment_time?: string;
 }
 
 export interface User {

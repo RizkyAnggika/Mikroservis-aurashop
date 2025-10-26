@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, History, RefreshCcw, Trash2 } from "lucide-react";
+import { Search, History, RefreshCcw, Trash2, CreditCard } from "lucide-react";
 import { Tea, CartItem, Order, OrderStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { filterTeas, debounce } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select";
+import { Dialog, DialogContent,DialogHeader, DialogTitle, DialogTrigger,} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -265,15 +253,37 @@ export default function IndexPOSPage() {
   }, [isHistoryOpen]);
 
   const filteredOrders = useMemo(() => {
-    return orders
-      .filter((o) => (sourceFilter === "all" ? true : o.source === sourceFilter))
-      .filter((o) => (statusFilter === "all" ? true : getStatus(o) === statusFilter))
-      .filter((o) =>
-        orderSearch.trim()
-          ? getCustomerName(o).toLowerCase().includes(orderSearch.trim().toLowerCase())
-          : true
-      );
-  }, [orders, sourceFilter, statusFilter, orderSearch]);
+  return orders
+    .filter((o) =>
+      sourceFilter === "all" ? true : o.source === sourceFilter
+    )
+    .filter((o) => {
+      const currentStatus = getStatus(o);
+      // Jika statusFilter = "all", tampilkan hanya yang pending
+      if (statusFilter === "all") {
+        return currentStatus === "pending";
+      }
+      return currentStatus === statusFilter;
+    })
+    .filter((o) =>
+      orderSearch.trim()
+        ? getCustomerName(o)
+            .toLowerCase()
+            .includes(orderSearch.trim().toLowerCase())
+        : true
+    );
+}, [orders, sourceFilter, statusFilter, orderSearch]);
+
+ const openPaymentHistory = async (orderId: string) => {
+   try {
+  
+     toast.info(`Riwayat pembayaran untuk Order #${orderId}`);
+   } catch (e) {
+     console.error(e);
+     toast.error("Gagal membuka riwayat pembayaran");
+   }
+  };
+
 
   const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
@@ -320,159 +330,283 @@ export default function IndexPOSPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="text-xl font-semibold">Kasir</div>
 
-          <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-            <DialogTrigger asChild>
-              <Button variant="secondary" className="gap-2">
-                <History className="w-4 h-4" />
-                Lihat Riwayat Order
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="gap-2">
+                  <History className="w-4 h-4" />
+                  List Order Online
+                </Button>
+              </DialogTrigger>
 
-            <DialogContent className="max-w-3xl sm:max-w-4xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  Riwayat Order
-                </DialogTitle>
-              </DialogHeader>
+              <DialogContent className="max-w-3xl sm:max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <History className="w-5 h-5" />
+                    Order Online
+                  </DialogTitle>
+                </DialogHeader>
 
-              {/* Toolbar Filter */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    placeholder="Cari nama pelanggan…"
-                    className="pl-9"
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                  />
+                {/* Toolbar Filter */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Cari nama pelanggan…"
+                      className="pl-9"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={loadOrders}
+                    disabled={isLoadingOrders}
+                    className="gap-2"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    {isLoadingOrders ? "Memuat…" : "Refresh"}
+                  </Button>
                 </div>
 
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v: "all" | OrderStatus) => setStatusFilter(v)}
-                >
-                  <SelectTrigger className="w-full sm:w-44">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* List Orders */}
+                <ScrollArea className="h-[55vh] mt-4">
+                  {filteredOrders.length === 0 ? (
+                    <div className="text-center text-sm text-muted-foreground py-10">
+                      {isLoadingOrders ? "Memuat riwayat…" : "Belum ada order."}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredOrders.map((o) => {
+                        const name = getCustomerName(o);
+                        const displayISO = getDisplayTimeISO(o);
+                        const displayTime = displayISO ? fmtTime(displayISO) : "-";
+                        const total = getTotal(o);
+                        const notes = getNotes(o);
+                        const status = getStatus(o);
+                        const isPaid = String(status).toLowerCase()
 
-                <Button
-                  variant="outline"
-                  onClick={loadOrders}
-                  disabled={isLoadingOrders}
-                  className="gap-2"
-                >
-                  <RefreshCcw className="w-4 h-4" />
-                  {isLoadingOrders ? "Memuat…" : "Refresh"}
+                        return (
+                          <Card key={o.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium truncate">{name}</span>
+                                  <Badge variant="secondary" className="capitalize">
+                                    {o.source ?? "pos"}
+                                  </Badge>
+                                </div>
+
+                                <div className="text-xs text-muted-foreground">
+                                  {displayTime} • {(o.items?.length ?? 0)} item
+                                </div>
+
+                                <div className="mt-2 text-sm">
+                                  {Array.isArray(o.items) && o.items.length > 0 ? (
+                                    o.items.slice(0, 3).map((it, i) => (
+                                      <div key={i}>
+                                        {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                                        {it.quantity ?? it.qty ?? 0}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span className="text-gray-500 italic">Tidak ada item</span>
+                                  )}
+                                  {(o.items?.length ?? 0) > 3 && <span>…</span>}
+                                </div>
+
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  <span className="font-medium">Catatan:</span>{" "}
+                                  {notes ? notes : <span className="italic text-gray-400">—</span>}
+                                </div>
+                              </div>
+
+                              <div className="text-right">
+                                <div className="font-semibold">{fmtIDR(total)}</div>
+
+                                <div className="mt-2 flex gap-2 items-end">
+                                  <div className="flex flex-col gap-2 w-full"> 
+                                    <p className="border border-gray rounded-lg flex justify-center ">
+                                      {o.order_status
+                                        ? o.order_status.charAt(0).toUpperCase() + o.order_status.slice(1).toLowerCase()
+                                        : ""}
+                                    </p>                           
+
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        loadOrderFromHistory(o);
+                                        setIsHistoryOpen(false);
+                                      }}
+                                    >
+                                      Gunakan order ini
+                                    </Button>
+                                  </div>
+
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => handleDeleteOrder(String(o.id))}
+                                    disabled={deletingId === String(o.id)}
+                                    title="Hapus order ini"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="gap-2 bg-black hover:bg-gray-700 text-white">
+                  <CreditCard className="w-4 h-4" />
+                  Riwayat Payment
                 </Button>
-              </div>
+              </DialogTrigger>
 
-              {/* List Orders */}
-              <ScrollArea className="h-[55vh] mt-4">
-                {filteredOrders.length === 0 ? (
-                  <div className="text-center text-sm text-muted-foreground py-10">
-                    {isLoadingOrders ? "Memuat riwayat…" : "Belum ada order."}
+              <DialogContent className="max-w-3xl sm:max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <History className="w-5 h-5" />
+                    Payment
+                  </DialogTitle>
+                </DialogHeader>
+
+                {/* Toolbar Filter */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Cari nama pelanggan…"
+                      className="pl-9"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredOrders.map((o) => {
-                      const name = getCustomerName(o);
-                      const displayISO = getDisplayTimeISO(o);
-                      const displayTime = displayISO ? fmtTime(displayISO) : "-";
-                      const total = getTotal(o);
-                      const notes = getNotes(o);
-                      const status = getStatus(o);
 
-                      return (
-                        <Card key={o.id} className="p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium truncate">{name}</span>
-                                <Badge variant="secondary" className="capitalize">
-                                  {o.source ?? "pos"}
-                                </Badge>
+                  <Button
+                    variant="outline"
+                    onClick={loadOrders}
+                    disabled={isLoadingOrders}
+                    className="gap-2"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    {isLoadingOrders ? "Memuat…" : "Refresh"}
+                  </Button>
+                </div>
+
+                {/* List Orders */}
+                <ScrollArea className="h-[55vh] mt-4">
+                  {filteredOrders.length === 0 ? (
+                    <div className="text-center text-sm text-muted-foreground py-10">
+                      {isLoadingOrders ? "Memuat riwayat…" : "Belum ada order."}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredOrders.map((o) => {
+                        const name = getCustomerName(o);
+                        const displayISO = getDisplayTimeISO(o);
+                        const displayTime = displayISO ? fmtTime(displayISO) : "-";
+                        const total = getTotal(o);
+                        const notes = getNotes(o);
+                        const status = getStatus(o);
+                        const isPaid = String(status).toLowerCase()
+
+                        return (
+                          <Card key={o.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium truncate">{name}</span>
+                                  <Badge variant="secondary" className="capitalize">
+                                    {o.source ?? "pos"}
+                                  </Badge>
+                                </div>
+
+                                <div className="text-xs text-muted-foreground">
+                                  {displayTime} • {(o.items?.length ?? 0)} item
+                                </div>
+
+                                <div className="mt-2 text-sm">
+                                  {Array.isArray(o.items) && o.items.length > 0 ? (
+                                    o.items.slice(0, 3).map((it, i) => (
+                                      <div key={i}>
+                                        {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                                        {it.quantity ?? it.qty ?? 0}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span className="text-gray-500 italic">Tidak ada item</span>
+                                  )}
+                                  {(o.items?.length ?? 0) > 3 && <span>…</span>}
+                                </div>
+
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  <span className="font-medium">Catatan:</span>{" "}
+                                  {notes ? notes : <span className="italic text-gray-400">—</span>}
+                                </div>
                               </div>
 
-                              <div className="text-xs text-muted-foreground">
-                                {displayTime} • {(o.items?.length ?? 0)} item
-                              </div>
+                              <div className="text-right">
+                                <div className="font-semibold">{fmtIDR(total)}</div>
 
-                              <div className="mt-2 text-sm">
-                                {Array.isArray(o.items) && o.items.length > 0 ? (
-                                  o.items.slice(0, 3).map((it, i) => (
-                                    <div key={i}>
-                                      {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
-                                      {it.quantity ?? it.qty ?? 0}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className="text-gray-500 italic">Tidak ada item</span>
-                                )}
-                                {(o.items?.length ?? 0) > 3 && <span>…</span>}
-                              </div>
+                                <div className="mt-2 flex gap-2 items-end">
+                                  <div className="flex flex-col gap-2 w-full"> 
+                                    <p className="border border-gray rounded-lg flex justify-center ">
+                                      {o.order_status
+                                        ? o.order_status.charAt(0).toUpperCase() + o.order_status.slice(1).toLowerCase()
+                                        : ""}
+                                    </p>                           
 
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                <span className="font-medium">Catatan:</span>{" "}
-                                {notes ? notes : <span className="italic text-gray-400">—</span>}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        loadOrderFromHistory(o);
+                                        setIsHistoryOpen(false);
+                                      }}
+                                    >
+                                      Gunakan order ini
+                                    </Button>
+                                  </div>
+
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => handleDeleteOrder(String(o.id))}
+                                    disabled={deletingId === String(o.id)}
+                                    title="Hapus order ini"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
 
-                            <div className="text-right">
-                              <div className="font-semibold">{fmtIDR(total)}</div>
-                              <Select
-                                value={status}
-                                onValueChange={(v: OrderStatus) => updateStatus(String(o.id), v)}
-                              >
-                                <SelectTrigger className="mt-2 h-8 w-[140px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pending">Pending</SelectItem>
-                                  <SelectItem value="paid">Paid</SelectItem>
-                                </SelectContent>
-                              </Select>
+          </div>
 
-                              <div className="mt-2 flex gap-2 justify-end">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    loadOrderFromHistory(o);
-                                    setIsHistoryOpen(false);
-                                  }}
-                                >
-                                  Gunakan order ini
-                                </Button>
-
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() => handleDeleteOrder(String(o.id))}
-                                  disabled={deletingId === String(o.id)}
-                                  title="Hapus order ini"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  {deletingId === String(o.id) ? "Menghapus…" : "Hapus"}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {/* Search & Kategori */}
