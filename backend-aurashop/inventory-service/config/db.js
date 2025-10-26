@@ -1,17 +1,19 @@
 const mysql = require('mysql2');
+require('dotenv').config(); // 🔹 Load .env file
 
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root', // ubah sesuai user SQLyog kamu
-  password: '', // isi password MySQL kamu
-  database: 'aurashop_inventory'
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME
 });
 
 db.connect((err) => {
   if (err) {
-    console.error('Database connection error:', err);
+    console.error('❌ Database connection error:', err.message);
   } else {
-    console.log('✅ MySQL Connected to aurashop_inventory');
+    console.log(`✅ MySQL Connected to ${process.env.DB_NAME} (${process.env.DB_HOST})`);
   }
 });
 

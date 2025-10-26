@@ -1,23 +1,23 @@
-# Gunakan base image Node.js yang ringan dan stabil
-FROM node:18-alpine
+# === Base image Node.js
+FROM node:20-alpine
 
-# Tentukan direktori kerja di dalam container
+# Set working directory
 WORKDIR /app
 
-# Salin file package.json dan package-lock.json terlebih dahulu
+# Salin file manifest dulu
 COPY package*.json ./
 
-# Install dependencies (hanya yang dibutuhkan untuk production)
-RUN npm install --only=production
+# Install semua dependencies (termasuk devDependencies)
+RUN npm install && npm install -g nodemon
 
-# Salin seluruh kode project ke dalam container
+# Salin seluruh source code
 COPY . .
 
-# Pastikan folder uploads ada (kalau digunakan untuk penyimpanan file)
-RUN mkdir -p uploads
-
-# Expose port yang digunakan di server.js
+# Expose port
 EXPOSE 4001
 
-# Jalankan aplikasi menggunakan perintah start dari package.json
-CMD ["npm", "start"]
+# Pastikan environment untuk development
+ENV NODE_ENV=development
+
+# Jalankan app
+CMD ["npm", "run", "dev"]
