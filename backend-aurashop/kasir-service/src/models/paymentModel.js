@@ -75,6 +75,16 @@ findAll: async (options = {}) => {
     const [rows] = await db.query(sql, params);
     return rows;
   },
+  findById: async (id) => {
+    const [rows] = await db.query('SELECT * FROM payments WHERE id = ?', [id]);
+    return rows[0];
+  },
+
+  // ❌ Hapus pembayaran berdasarkan ID
+  deleteById: async (id) => {
+    const [result] = await db.query('DELETE FROM payments WHERE id = ?', [id]);
+    return result;
+  },
 };
 
 module.exports = Payment;

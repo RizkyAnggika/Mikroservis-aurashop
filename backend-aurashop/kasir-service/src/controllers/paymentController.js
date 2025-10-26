@@ -1,7 +1,7 @@
 // 📁 payment_service/controllers/paymentController.js
 const Payment = require('../models/paymentModel');
-const orderService = require('../services/orderService');
 const inventoryService = require('../services/inventoryService');
+const orderService = require('../services/orderService');
 const HttpError = require('../utils/HttpError');
 
 // 🟢 Membuat pembayaran untuk order tertentu
@@ -202,3 +202,30 @@ exports.getAllPayments = async (req, res, next) => {
     next(error);
   }
 };
+
+// 🗑️ Hapus 1 pembayaran + order yang terkait
+exports.deletePay = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // 🔍 Ambil data payment dulu dari DB
+    const payment = await Payment.findById(id);
+    if (!payment) throw new HttpError("Pembayaran tidak ditemukan", 404);
+
+    const orderId = payment.orderId;
+
+    // 🗑️ Hapus payment
+    const result = await Payment.deleteById(id);
+    if (result.affectedRows === 0) throw new HttpError('Gagal menghapus payment', 500);
+
+    // 🗑️ Hapus order (panggil ke order-service)
+    await orderService.deleteOrder(orderId);
+
+    res.status(200).json({
+      message: `Pembayaran #${id} dan order #${orderId} berhasil dihapus`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

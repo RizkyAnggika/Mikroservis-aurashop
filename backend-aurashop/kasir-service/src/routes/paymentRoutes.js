@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createPayment, getPaymentsByOrder, getAllPayments} = require('../controllers/paymentController');
+const { createPayment, getPaymentsByOrder, getAllPayments, deletePay} = require('../controllers/paymentController');
 const validateId = require('../middleware/validateId'); // optional middleware untuk validasi
 
 // 💳 Pay order
@@ -14,5 +14,10 @@ router.get('/orders/:id/payments', validateId, getPaymentsByOrder);
 // 🗂️ All payments (filter & pagination)
 // GET /api/payments
 router.get('/payments', getAllPayments);
+
+// 📁 routes/paymentRoutes.js
+
+router.delete('/payments/:id', validateId, deletePay); // 🗑️ Delete payment by ID
+
 
 module.exports = router;

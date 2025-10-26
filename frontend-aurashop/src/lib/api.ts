@@ -190,13 +190,13 @@ export const api = {
       // tarik timestamp dari berbagai kemungkinan field milik backend
       const created =
         order.createdAt ??
-        (order as any).created_at ??
+        (order as Order).created_at ??
         null;
 
       const paid =
-        (order as any).paidAt ??
-        (order as any).paid_at ??
-        (order as any).payment_time ??
+        (order as Order).paidAt ??
+        (order as Order).paid_at ??
+        (order as Order).payment_time ??
         null;
 
       return {
@@ -233,7 +233,7 @@ export const api = {
         // ⬇️ simpan paidAt kalau backend kirim (untuk tampilan jam "paid")
         paidAt: paid,
 
-        source: (order as any).source ?? "pos",
+        source: (order as Order).source ?? "pos",
       } as Order;
     });
   },
@@ -263,6 +263,10 @@ export const api = {
     const res = await axios.get(`${PAYMENT_API}/payments`);
     return res.data.data || [];
   },
+  async deletePay(paymentId: string | number): Promise<void> {
+    await axios.delete(`${PAYMENT_API}/payments/${paymentId}`);
+  },
+
 };
 
 function mapItemsForBackend(items: CartItem[]) {

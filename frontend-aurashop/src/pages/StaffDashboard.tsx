@@ -14,7 +14,6 @@ import POSMenuCard from "@/components/pos/POSMenuCard";
 import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
-import { set } from "react-hook-form";
 
 // ---------- Helpers ----------
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
@@ -25,14 +24,14 @@ const getExtra = (o: Order) => Number(o.extra ?? o.additionalFee ?? 0);
 const getOrderDate = (o: Order) =>
   o.createdAt ??
   (typeof o.orderDate === "string" ? o.orderDate : "") ??
-  (o as any).created_at ??
+  (o as Order).created_at ??
   "";
 
 const getUpdatedAt = (o: Order) =>
-  (o as any).updatedAt ?? (o as any).updated_at ?? "";
+  (o as Order).updatedAt ?? (o as Order).updated_at ?? "";
 
 const getPaidAt = (o: Order) =>
-  (o as any).paidAt ?? (o as any).paid_at ?? (o as any).payment_time ?? "";
+  (o as Order).paidAt ?? (o as Order).paid_at ?? (o as Order).payment_time ?? "";
 
 const getTotal = (o: Order) => Number(o.totalPrice ?? o.total ?? 0);
 
@@ -74,10 +73,10 @@ export default function IndexPOSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+  const [isLoadingPayments] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
   const [sourceFilter] = useState<"all" | "shop" | "pos">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [statusFilter] = useState<"all" | OrderStatus>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [customerName, setCustomerName] = useState<string>("");
@@ -323,42 +322,11 @@ useEffect(() => {
       );
   }, [orders, sourceFilter, statusFilter, orderSearch]);
 
-const paidOrders = useMemo(() => {
-  return orders
-    .filter((o) => getStatus(o) === "paid")
-    .filter((o) =>
-      orderSearch.trim()
-        ? getCustomerName(o).toLowerCase().includes(orderSearch.trim().toLowerCase())
-        : true
-    );
-}, [orders, orderSearch]);
-
- const openPaymentHistory = async (orderId: string) => {
-   try {
-  
-     toast.info(`Riwayat pembayaran untuk Order #${orderId}`);
-   } catch (e) {
-     console.error(e);
-     toast.error("Gagal membuka riwayat pembayaran");
-   }
-  };
-
-
-  const updateStatus = async (orderId: string, status: OrderStatus) => {
-    try {
-      await api.updateOrderStatus(orderId, status);
-      // refetch supaya updatedAt/paidAt ikut backend
-      await loadOrders();
-      toast.success("Status diperbarui");
-    } catch {
-      toast.error("Gagal memperbarui status");
-    }
-  };
-
   const handleDeleteOrder = async (orderId: string) => {
     if (!confirm(`Yakin hapus order #${orderId}?`)) return;
     try {
       setDeletingId(orderId);
+      
       await api.deleteOrder(orderId);
       setOrders((prev) => prev.filter((o) => String(o.id) !== orderId));
       if (draftOrderId === orderId) {
@@ -373,6 +341,25 @@ const paidOrders = useMemo(() => {
     } catch (e) {
       console.error(e);
       toast.error("Gagal menghapus order");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm(`Yakin hapus riwayat payment #${paymentId} (beserta order-nya)?`)) return;
+    try {
+      setDeletingId(paymentId);
+      
+      await api.deletePay(paymentId); // ⬅️ akan menghapus payment + order
+      setPayments((prev) => prev.filter((o) => String(o.id) !== paymentId));
+
+      // Optional: hapus dari list order juga kalau kamu punya
+      setOrders((prev) => prev.filter((o) => String(o.id) !== paymentId)); // HANYA kalau paymentId === orderId
+
+      toast.success(`Payment #${paymentId} dan order terkait dihapus`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Gagal menghapus payment");
     } finally {
       setDeletingId(null);
     }
@@ -442,9 +429,7 @@ const paidOrders = useMemo(() => {
                         const displayISO = getDisplayTimeISO(o);
                         const displayTime = displayISO ? fmtTime(displayISO) : "-";
                         const total = getTotal(o);
-                        const notes = getNotes(o);
-                        const status = getStatus(o);
-                        const isPaid = String(status).toLowerCase() === "paid";
+                        const notes = getNotes(o);                      
 
                         return (
                           <Card key={o.id} className="p-4">
@@ -575,73 +560,70 @@ const paidOrders = useMemo(() => {
                   ) : (
                     <div className="space-y-3">
                       {payments.map((p) => {
-  const orderInfo = orders.find(order => String(order.id) === String(p.orderId));
+                        const orderInfo = orders.find(order => String(order.id) === String(p.orderId));
 
-  return (
-    <Card key={p.id} className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium truncate">
-              {orderInfo ? orderInfo.customer_name : "Order tidak ditemukan"}
-            </span>
-            <Badge variant="secondary" className="capitalize">
-              {orderInfo?.source ?? "pos"}
-            </Badge>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {p.created_at} • {(orderInfo?.items?.length ?? 0)} item
-          </div>
-          <div className="mt-2 text-sm">
-            {Array.isArray(orderInfo?.items) && orderInfo.items.length > 0 ? (
-              orderInfo.items.slice(0, 3).map((it, i) => (
-                <div key={i}>
-                  {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
-                  {it.quantity ?? it.qty ?? 0}
-                </div>
-              ))
-            ) : (
-              <span className="text-gray-500 italic">Tidak ada item</span>
-            )}
-            {(orderInfo?.items?.length ?? 0) > 3 && <span>…</span>}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            <span className="font-medium">Catatan:</span>{" "}
-            {orderInfo?.notes ?? <span className="italic text-gray-400">—</span>}
-          </div>
-        </div>
+                        return (
+                          <Card key={p.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium truncate">
+                                    {orderInfo ? orderInfo.customer_name : "Order tidak ditemukan"}
+                                  </span>
+                                  <Badge variant="secondary" className="capitalize">
+                                    {orderInfo?.source ?? "pos"}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {p.created_at} • {(orderInfo?.items?.length ?? 0)} item
+                                </div>
+                                <div className="mt-2 text-sm">
+                                  {Array.isArray(orderInfo?.items) && orderInfo.items.length > 0 ? (
+                                    orderInfo.items.slice(0, 3).map((it, i) => (
+                                      <div key={i}>
+                                        {(it.tea?.name || it.nama_produk || "Produk")} ×{" "}
+                                        {it.quantity ?? it.qty ?? 0}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span className="text-gray-500 italic">Tidak ada item</span>
+                                  )}
+                                  {(orderInfo?.items?.length ?? 0) > 3 && <span>…</span>}
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  <span className="font-medium">Catatan:</span>{" "}
+                                  {orderInfo?.notes ?? <span className="italic text-gray-400">—</span>}
+                                </div>
+                              </div>
 
-        <div className="text-right">
-          <div className="font-semibold">{fmtIDR(p.amount)}</div>
-          <div className="mt-2 flex gap-2 items-end">
-            <div className="flex flex-col gap-2 w-full"> 
-              <p className="border border-gray rounded-lg flex justify-center ">
-                {orderInfo?.order_status
-                  ? orderInfo.order_status.charAt(0).toUpperCase() + orderInfo.order_status.slice(1).toLowerCase()
-                  : ""} {p.status}
-              </p>
-              <Button variant="outline" size="sm" disabled title="Order sudah dibayar">
-                Gunakan order ini
-              </Button>
-            </div>
+                              <div className="text-right">
+                                <div className="font-semibold">{fmtIDR(p.amount)}</div>
+                                <div className="mt-2 flex gap-2 items-end">
+                                  <div className="flex flex-col gap-2 w-full"> 
+                                    <p className="border border-gray rounded-lg flex justify-center px-4 py-1.5">
+                                      {orderInfo?.order_status
+                                        ? orderInfo.order_status.charAt(0).toUpperCase() + orderInfo.order_status.slice(1).toLowerCase()
+                                        : ""} {p.status}
+                                    </p>
+                                  </div>
 
-            <Button
-              variant="destructive"
-              size="sm"
-              className="gap-1"
-              onClick={() => handleDeleteOrder(String(orderInfo?.id))}
-              disabled={deletingId === String(orderInfo?.id)}
-              title="Hapus order ini"
-            >
-              <Trash2 className="w-4 h-4" />
-              {deletingId === String(orderInfo?.id) ? "Menghapus…" : "Hapus"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-})}
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => handleDeletePayment(String(p.id))}
+                                    disabled={deletingId === String(orderInfo?.id)}
+                                    title="Hapus order ini"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    {deletingId === String(orderInfo?.id) ? "Menghapus…" : "Hapus"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                 </ScrollArea>

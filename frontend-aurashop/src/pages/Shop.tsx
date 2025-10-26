@@ -14,6 +14,22 @@ import { getClientId } from "@/lib/auth";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
+interface RawTea {
+  id: string | number;
+  name?: string;
+  nama_produk?: string;
+  description?: string;
+  deskripsi?: string;
+  image?: string;
+  gambar?: string;
+  category?: string;
+  kategori?: string;
+  price?: number | string | null;
+  harga?: number | string | null;
+  stock?: number | string | null;
+  stok?: number | string | null;
+}
+
 export default function Shop() {
   const [teas, setTeas] = useState<Tea[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -28,11 +44,11 @@ export default function Shop() {
   
   const teasData = await api.getTeas();
 
-  const normalized = teasData.map((t: any) => ({
+  const normalized = teasData.map((t: RawTea) => ({
     ...t,
     price: Number(t.price ?? t.harga ?? 0),
     stock: Number(t.stock ?? t.stok ?? 0),
-  }));
+  })) as unknown as Tea[];
 
   setTeas(normalized);
 } catch (error) {
