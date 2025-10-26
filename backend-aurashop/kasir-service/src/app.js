@@ -12,6 +12,6 @@ app.use(bodyParser.json());
 app.use('/api/products', productRoutes);
 
 // 💳 Pembayaran / Kasir
-app.use('/api/orders', paymentRoutes); // 🆕 Tambahkan ini
+app.use('/api', paymentRoutes); // 🆕 Tambahkan ini
 
 module.exports = app;

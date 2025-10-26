@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { createPayment, getPaymentsByOrder } = require('../controllers/paymentController');
+const { createPayment, getPaymentsByOrder, getAllPayments} = require('../controllers/paymentController');
 const validateId = require('../middleware/validateId'); // optional middleware untuk validasi
 
-/**
- * @route POST /api/orders/:id/pay
- * @desc  Simulasi pembayaran pesanan
- */
-router.post('/:id/pay', validateId, createPayment);
+// 💳 Pay order
+// POST /api/orders/:id/pay
+router.post('/orders/:id/pay', validateId, createPayment);
 
-/**
- * @route GET /api/orders/:id/payments
- * @desc  Mendapatkan riwayat pembayaran untuk pesanan tertentu
- */
-router.get('/:id/payments', validateId, getPaymentsByOrder);
+// 🧾 Payments by order
+// GET /api/orders/:id/payments
+router.get('/orders/:id/payments', validateId, getPaymentsByOrder);
+
+// 🗂️ All payments (filter & pagination)
+// GET /api/payments
+router.get('/payments', getAllPayments);
 
 module.exports = router;

@@ -127,8 +127,76 @@ exports.getPaymentsByOrder = async (req, res, next) => {
     const payments = await Payment.findByOrderId(orderId);
 
     res.status(200).json({
-      message: 'Riwayat pembayaran ditemukan',
+      message: payments.length ? 'Riwayat pembayaran ditemukan' : 'Belum ada pembayaran',
       data: payments,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// 🗂️ Ambil semua pembayaran (opsional: filter & pagination)
+exports.getAllPayments = async (req, res, next) => {
+  try {
+    // query: ?page=1&limit=50&status=success&paymentMethod=cash&orderId=123
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+
+    const filters = {
+      status: req.query.status,                // "success" | "failed" | dll
+      paymentMethod: req.query.paymentMethod,  // "cash" | "qris" | "card" | dll
+      orderId: req.query.orderId               // id order tertentu
+    };
+
+    let result;
+
+    // Jika model mendukung findAll dengan options (offset/limit/filter)
+    if (typeof Payment.findAll === "function" && Payment.findAll.length >= 1) {
+      result = await Payment.findAll({ offset, limit, ...filters, order: "DESC" });
+    } 
+    // Fallback ke getAll / all bila ada
+    else if (typeof Payment.getAll === "function") {
+      result = await Payment.getAll();
+    } else if (typeof Payment.all === "function") {
+      result = await Payment.all();
+    } 
+    // Fallback paling simpel
+    else if (typeof Payment.findAll === "function") {
+      result = await Payment.findAll();
+    } 
+    else {
+      throw new HttpError("Model Payment belum mendukung pengambilan semua data (findAll/getAll).", 500);
+    }
+
+    // Jika result array penuh, kita filter & paginate di controller (aman untuk dataset kecil)
+    let rows = Array.isArray(result) ? result : (result?.rows || result?.data || []);
+    if (!Array.isArray(rows)) rows = [];
+
+    // Filter ringan di sisi controller (hanya bila model tak dukung filter)
+    const hasModelSideFilter = !(typeof Payment.findAll === "function" && Payment.findAll.length >= 1);
+    if (hasModelSideFilter) {
+      rows = rows.filter((p) => {
+        const okStatus = !filters.status || String(p.status).toLowerCase() === String(filters.status).toLowerCase();
+        const okMethod = !filters.paymentMethod || String(p.paymentMethod).toLowerCase() === String(filters.paymentMethod).toLowerCase();
+        const okOrder  = !filters.orderId || String(p.orderId) === String(filters.orderId);
+        return okStatus && okMethod && okOrder;
+      });
+
+      // Urutkan terbaru dulu bila ada created_at
+      rows.sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
+
+      // Pagination manual
+      rows = rows.slice(offset, offset + limit);
+    }
+
+    res.status(200).json({
+      message: "Daftar pembayaran ditemukan",
+      page,
+      limit,
+      count: rows.length,
+      data: rows,
     });
   } catch (error) {
     next(error);
