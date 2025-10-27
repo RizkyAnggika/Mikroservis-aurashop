@@ -1,0 +1,101 @@
+version: '3.9'
+
+services:
+  # ======================
+  # 🔵 INVENTORY SERVICE
+  # ======================
+  inventory-service:
+    build:
+      context: ./inventory-service
+    container_name: inventory-service
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_NAME=aurashop_inventory
+      - DB_PORT=3306
+    depends_on:
+      - db
+
+  # ======================
+  # 🟢 ORDER SERVICE
+  # ======================
+  order-service:
+    build:
+      context: ./order_service
+    container_name: order_service
+    ports:
+      - "5001:5001"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_NAME=aurashop_inventory
+      - DB_PORT=3306
+      - INVENTORY_URL=http://inventory-service:4001/api/inventory
+    depends_on:
+      - db
+      - inventory-service
+
+  # ======================
+  # 🟣 KASIR SERVICE
+  # ======================
+  kasir-service:
+    build:
+      context: ./kasir-service
+    container_name: kasir-service
+    ports:
+      - "4002:4002"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_NAME=aurashop_inventory
+      - DB_PORT=3306
+    depends_on:
+      - db
+      - order-service
+
+  # ======================
+  # 🟠 FRONTEND (VITE)
+  # ======================
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://order-service:5001
+    depends_on:
+      - order-service
+    # agar hot reload di lokal lancar
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # ======================
+  # 🗄️ DATABASE (MySQL)
+  # ======================
+  db:
+    image: mysql:8
+    container_name: mysql-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD:
+      MYSQL_DATABASE: aurashop_inventory
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+# ======================
+# 🧱 VOLUMES
+# ======================
+volumes:
+  db_data:
