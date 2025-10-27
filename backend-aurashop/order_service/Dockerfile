@@ -1,30 +1,28 @@
-# Gunakan image Node.js LTS
-FROM node:18-alpine
+# Gunakan versi Node.js terbaru dan ringan
+FROM node:20-alpine
 
-# Tentukan direktori kerja
+# Set working directory
 WORKDIR /app
 
-# Salin file package untuk cache dependency
+# Salin package file
 COPY package*.json ./
 
-# Install hanya dependencies production
-RUN npm ci --only=production
+# Install dependencies (production-only kalau build final)
+RUN npm install --production
 
 # Salin seluruh source code
 COPY . .
 
-# Set environment untuk production
-ENV NODE_ENV=production
-
-# Environment variable antar service (disesuaikan)
+# Set environment variable
+ENV NODE_ENV=development
 ENV INVENTORY_URL=http://inventory-service:4001/api/inventory
 
-# Ekspos port service
+# Expose port
 EXPOSE 5001
 
-# (Opsional) Tambahkan healthcheck biar container terpantau sehat
+# Tambahkan healthcheck (opsional tapi recommended)
 HEALTHCHECK --interval=30s --timeout=5s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:5001/ || exit 1
 
 # Jalankan aplikasi
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
