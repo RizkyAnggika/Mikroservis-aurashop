@@ -1,112 +1,105 @@
-version: '3.9'
+version: "3.9"
 
 services:
-  # ===============================
-  # 🗄️ DATABASE SERVICE (MySQL)
-  # ===============================
-  db:
-    image: mysql:8
+  # 🧩 Database
+  mysql:
+    image: mysql:8.0
     container_name: mysql-db
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: aurashop_inventory
-      MYSQL_USER: user
-      MYSQL_PASSWORD: userpass
     ports:
       - "3306:3306"
     volumes:
-      # ✅ Simpan data ke folder lokal ./mysql_data supaya gak hilang
-      - ./mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - mysql_data:/var/lib/mysql
+    networks:
+      - auranet
 
-  # ===============================
-  # 📦 INVENTORY SERVICE
-  # ===============================
+  # 🟦 Inventory Service
   inventory-service:
     build: ./inventory-service
     container_name: inventory-service
-    restart: always
     ports:
       - "4001:4001"
     environment:
-      NODE_ENV: development
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: user
-      DB_PASSWORD: userpass
-      DB_NAME: aurashop_inventory
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=aurashop_inventory
+    volumes:
+      - ./inventory-service:/app
+      - /app/node_modules
+    command: npm run dev
     depends_on:
-      db:
-        condition: service_healthy
+      - mysql
+    networks:
+      - auranet
 
-  # ===============================
-  # 💳 ORDER SERVICE
-  # ===============================
+  # 🟧 Order Service
   order-service:
-    build: ./order-service
-    container_name: order-service
-    restart: always
+    build: ./order_service
+    container_name: order_service
     ports:
       - "5001:5001"
     environment:
-      NODE_ENV: production
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: user
-      DB_PASSWORD: userpass
-      DB_NAME: aurashop_inventory
-      INVENTORY_URL: http://inventory-service:4001/api/inventory
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=aurashop_inventory
+      - INVENTORY_URL=http://inventory-service:4001/api/inventory
+    volumes:
+      - ./order-service:/app
+      - /app/node_modules
+    command: npm run dev
     depends_on:
+      - mysql
       - inventory-service
-      - db
+    networks:
+      - auranet
 
-  # ===============================
-  # 🏪 CASHIER SERVICE
-  # ===============================
+  # 🟨 Cashier Service
   cashier-service:
     build: ./cashier-service
     container_name: cashier-service
-    restart: always
     ports:
       - "4002:4002"
     environment:
-      NODE_ENV: production
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: user
-      DB_PASSWORD: userpass
-      DB_NAME: aurashop_inventory
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=aurashop_inventory
+      - ORDER_URL=http://order-service:5001/api/orders
+    volumes:
+      - ./cashier-service:/app
+      - /app/node_modules
+    command: npm run dev
     depends_on:
-      - db
+      - mysql
       - order-service
+    networks:
+      - auranet
 
-  # ===============================
-  # 💻 FRONTEND (VITE / REACT)
-  # ===============================
+  # 🟩 Frontend
   frontend:
     build: ./frontend
     container_name: frontend
-    restart: always
     ports:
       - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:5001
-    depends_on:
-      - order-service
-    # opsional: mount agar auto-refresh dev
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    depends_on:
+      - inventory-service
+      - order-service
+      - cashier-service
+    networks:
+      - auranet
 
-# ===============================
-# 🔒 PERSISTENT STORAGE
-# ===============================
 volumes:
-  # Dulu: db_data
-  # Sekarang kita mount langsung ke folder ./mysql_data agar bisa diakses lokal
-  # jadi kamu bisa buka folder itu & backup manual
+  mysql_data:
+
+networks:
+  auranet:
+    driver: bridge
