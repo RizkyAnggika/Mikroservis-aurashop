@@ -1,28 +1,23 @@
-# Gunakan versi Node.js terbaru dan ringan
+# === Base image Node.js
 FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Salin package file
+# Salin file manifest dulu
 COPY package*.json ./
 
-# Install dependencies (production-only kalau build final)
-RUN npm install --production
+# Install semua dependencies (termasuk devDependencies)
+RUN npm install && npm install -g nodemon
 
 # Salin seluruh source code
 COPY . .
 
-# Set environment variable
-ENV NODE_ENV=development
-ENV INVENTORY_URL=http://inventory-service:4001/api/inventory
-
 # Expose port
 EXPOSE 5001
 
-# Tambahkan healthcheck (opsional tapi recommended)
-HEALTHCHECK --interval=30s --timeout=5s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:5001/ || exit 1
+# Pastikan environment untuk development
+ENV NODE_ENV=development
 
-# Jalankan aplikasi
-CMD ["npm", "start"]
+# Jalankan app
+CMD ["npm", "run", "dev"]

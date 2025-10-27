@@ -1,5 +1,6 @@
 // 📁 models/paymentModel.js
-const db = require('../../../order_service/src/config/db'); // pool.promise()
+const db = require('../config/db'); // ✅ ini path yang benar
+; // pool.promise()
 
 const Payment = {
   // 🧩 Simpan data pembayaran
