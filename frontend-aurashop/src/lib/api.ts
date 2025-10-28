@@ -1,9 +1,9 @@
 import axios, { AxiosError } from "axios";
 import { Tea, Order, CartItem, OrderStatus, Payment } from "@/lib/types";
 
-const API_URL = "http://192.168.1.123:4001/api/inventory";
-const ORDER_API = "http://192.168.1.123:5001/api/orders";
-const PAYMENT_API = "http://192.168.1.123:4002/api";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4001/api/inventory"
+const ORDER_API = import.meta.env.VITE_ORDER_API ?? "http://localhost:5001/api/orders";
+const PAYMENT_API = import.meta.env.VITE_PAYMENT_API ?? "http://localhost:4002/api";
 
 interface BackendTea {
   id: number;

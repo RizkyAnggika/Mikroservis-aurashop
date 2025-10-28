@@ -1,6 +1,12 @@
 # === Base image Node.js
 FROM node:20-alpine
 
+# Install tzdata untuk timezone support
+RUN apk add --no-cache tzdata
+
+# Set timezone (opsional, ubah sesuai lokasi kamu)
+ENV TZ=Asia/Makassar
+
 # Set working directory
 WORKDIR /app
 

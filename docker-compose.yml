@@ -1,105 +1,115 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  # 🧩 Database
-  mysql:
+  # 🧩 DATABASE
+  db:
     image: mysql:8.0
-    container_name: mysql-db
+    container_name: aurashop-db
     restart: always
+    env_file:
+      - .env
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: aurashop_inventory
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      TZ: Asia/Makassar
+    command: ["mysqld", "--default-time-zone=+08:00"]
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - auranet
+      - db_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # 🟦 Inventory Service
-  inventory-service:
-    build: ./inventory-service
-    container_name: inventory-service
-    ports:
-      - "4001:4001"
-    environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=root
-      - DB_NAME=aurashop_inventory
-    volumes:
-      - ./inventory-service:/app
-      - /app/node_modules
-    command: npm run dev
+  # 🟦 INVENTORY SERVICE
+  inventory:
+    build: ./backend-aurashop/inventory-service
+    container_name: aurashop-inventory
+    restart: always
     depends_on:
-      - mysql
-    networks:
-      - auranet
-
-  # 🟧 Order Service
-  order-service:
-    build: ./order_service
-    container_name: order_service
+      db:
+        condition: service_healthy
     ports:
-      - "5001:5001"
+      - "${INVENTORY_PORT}:4001"
+    env_file:
+      - .env
     environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=root
-      - DB_NAME=aurashop_inventory
-      - INVENTORY_URL=http://inventory-service:4001/api/inventory
-    volumes:
-      - ./order-service:/app
-      - /app/node_modules
-    command: npm run dev
-    depends_on:
-      - mysql
-      - inventory-service
-    networks:
-      - auranet
+      DB_HOST: db
+    command: sh -c "sleep 15 && npm run dev"
 
-  # 🟨 Cashier Service
-  cashier-service:
-    build: ./cashier-service
-    container_name: cashier-service
+  # 🟧 ORDER SERVICE
+  order:
+    build: ./backend-aurashop/order_service
+    container_name: aurashop-order
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      inventory:
+        condition: service_started
     ports:
-      - "4002:4002"
+      - "${ORDER_PORT}:5001"
+    env_file:
+      - .env
     environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=root
-      - DB_NAME=aurashop_inventory
-      - ORDER_URL=http://order-service:5001/api/orders
-    volumes:
-      - ./cashier-service:/app
-      - /app/node_modules
-    command: npm run dev
-    depends_on:
-      - mysql
-      - order-service
-    networks:
-      - auranet
+      DB_HOST: db
+      INVENTORY_URL: http://inventory:4001/api/inventory
+    command: sh -c "sleep 20 && npm run dev"
 
-  # 🟩 Frontend
+  # 🟨 KASIR SERVICE
+  kasir:
+    build: ./backend-aurashop/kasir-service
+    container_name: aurashop-kasir
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      order:
+        condition: service_started
+    ports:
+      - "${KASIR_PORT}:4002"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      ORDER_URL: http://order:5001/api/orders
+    command: sh -c "sleep 25 && npm run dev"
+
+  # 🟩 FRONTEND
   frontend:
-    build: ./frontend
-    container_name: frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    build: ./frontend-aurashop
+    container_name: aurashop-frontend
+    restart: always
     depends_on:
-      - inventory-service
-      - order-service
-      - cashier-service
-    networks:
-      - auranet
+      - inventory
+      - order
+      - kasir
+    ports:
+      - "${FRONTEND_PORT}:5173"
+    env_file:
+      - .env
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+      VITE_ORDER_API: ${VITE_ORDER_API}
+      VITE_PAYMENT_API: ${VITE_PAYMENT_API}
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "${FRONTEND_PORT}"]
+
+  # 🧮 PHPMYADMIN
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: aurashop-phpmyadmin
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8011:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
 
 volumes:
-  mysql_data:
-
-networks:
-  auranet:
-    driver: bridge
+  db_data:

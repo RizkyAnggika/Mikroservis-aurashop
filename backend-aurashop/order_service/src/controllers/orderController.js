@@ -10,29 +10,34 @@ const axios = require('axios'); // Tambahkan di paling atas file orderController
 // ===============================
 exports.createOrder = async (req, res, next) => {
   try {
-    const { userId, customer_name, items, totalPrice, notes, order_status } = req.body;
+    const { userId: rawUserId, customer_name, items, totalPrice, notes, order_status } = req.body;
 
-    // Ganti jadi
-if (!customer_name || !Array.isArray(items) || items.length === 0) {
-  throw new HttpError('Data pesanan tidak lengkap atau format items salah', 400);
-}
+    // Validasi awal
+    if (!customer_name || !Array.isArray(items) || items.length === 0) {
+      throw new HttpError('Data pesanan tidak lengkap atau format items salah', 400);
+    }
+
+    // ✅ Normalisasi userId ke integer (fallback 999 jika tidak valid)
+    let userId = Number.parseInt(String(rawUserId), 10);
+    if (!Number.isFinite(userId)) userId = 999;
 
     let calculatedTotalPrice = 0;
     const detailedItems = [];
 
-    // 🔁 Validasi & hitung total
+    // 🔁 Validasi & hitung total dari sumber kebenaran (Inventory)
     for (const item of items) {
-      if (!item.productId || !item.qty) {
+      const pid = item.productId ?? item.product_id;
+      const qty = Number(item.qty ?? item.quantity);
+      if (!pid || !qty) {
         throw new HttpError('Setiap item harus punya productId dan qty', 400);
       }
 
-      const product = await inventoryService.getProductById(item.productId);
+      const product = await inventoryService.getProductById(pid);
       if (!product || !product.id) {
-        throw new HttpError(`Produk dengan ID ${item.productId} tidak ditemukan`, 404);
+        throw new HttpError(`Produk dengan ID ${pid} tidak ditemukan`, 404);
       }
 
       const harga = Number(product.harga) || 0;
-      const qty = Number(item.qty);
       const subtotal = harga * qty;
 
       calculatedTotalPrice += subtotal;
@@ -46,7 +51,9 @@ if (!customer_name || !Array.isArray(items) || items.length === 0) {
       });
     }
 
-    const finalTotalPrice = totalPrice || calculatedTotalPrice;
+    const finalTotalPrice = Number.isFinite(Number(totalPrice))
+      ? Number(totalPrice)
+      : calculatedTotalPrice;
 
     // 💾 Simpan ke DB
     const result = await Order.create({
@@ -54,7 +61,7 @@ if (!customer_name || !Array.isArray(items) || items.length === 0) {
       customer_name,
       items: detailedItems,
       totalPrice: finalTotalPrice,
-      notes: (notes && String(notes).trim()) || null, // ⬅️ notes
+      notes: (notes && String(notes).trim()) || null,
       order_status: order_status || 'pending',
     });
 

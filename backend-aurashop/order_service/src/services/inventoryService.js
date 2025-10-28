@@ -1,8 +1,8 @@
 // 📁 src/services/inventoryService.js
 const axios = require('axios');
 
-// Gunakan environment variable agar fleksibel (Docker/development)
-const INVENTORY_BASE_URL = process.env.INVENTORY_URL || 'http://host.docker.internal:4001/api/inventory';
+const INVENTORY_BASE_URL = process.env.INVENTORY_URL || 'http://inventory:4001/api/inventory';
+
 
 const inventoryService = {
   /**

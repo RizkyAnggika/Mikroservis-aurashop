@@ -3,8 +3,7 @@ const axios = require('axios');
 const HttpError = require('../utils/HttpError');
 
 // ✅ BENAR: sesuai server inventory (server.js) -> app.use('/api/inventory', productRoutes);
-const INVENTORY_URL =
-  process.env.INVENTORY_SERVICE_URL || 'http://host.docker.internal:4001/api/inventory';
+const INVENTORY_URL = process.env.INVENTORY_URL || 'http://inventory:4001/api/inventory';
 
 
 exports.reduceStock = async (productId, quantity) => {
