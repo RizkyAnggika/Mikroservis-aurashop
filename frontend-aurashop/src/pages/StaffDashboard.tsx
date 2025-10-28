@@ -15,6 +15,24 @@ import POSCart from "@/components/pos/POSCart";
 import { teaCategories } from "@/data/mockData";
 import { toast } from "sonner";
 
+// === Timezone & Date Formatting ===
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Default timezone kamu (ubah kalau mau pakai Asia/Jakarta)
+const APP_TZ = "Asia/Makassar";
+
+// Helper untuk parsing waktu dari backend (MySQL / ISO)
+const fmtLocal = (date?: string | Date | null, fmt = "DD MMM HH:mm") => {
+  if (!date) return "-";
+  const d = dayjs(date).tz(APP_TZ);
+  return d.isValid() ? d.format(fmt) : "-";
+};
+
+
 // ---------- Helpers ----------
 const getCustomerName = (o: Order) => o.customer_name ?? o.customerName ?? "Walk-in";
 const getNotes = (o: Order) => (o.notes ?? o.note ?? "") as string;
@@ -92,13 +110,8 @@ export default function IndexPOSPage() {
       maximumFractionDigits: 0,
     }).format(v);
 
-  const fmtTime = (d: Date | string) =>
-    new Date(d).toLocaleString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const fmtTime = (d: string | Date) => fmtLocal(d);
+
 
   // ====== Load menu (POS) ======
   useEffect(() => {
@@ -575,8 +588,9 @@ useEffect(() => {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {p.created_at} • {(orderInfo?.items?.length ?? 0)} item
-                                </div>
+  {fmtLocal(p.paid_at || p.created_at)} • {(orderInfo?.items?.length ?? 0)} item
+</div>
+
                                 <div className="mt-2 text-sm">
                                   {Array.isArray(orderInfo?.items) && orderInfo.items.length > 0 ? (
                                     orderInfo.items.slice(0, 3).map((it, i) => (
