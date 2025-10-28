@@ -588,8 +588,8 @@ useEffect(() => {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-  {fmtLocal(p.paid_at || p.created_at)} • {(orderInfo?.items?.length ?? 0)} item
-</div>
+                                {fmtLocal(p.paid_at || p.created_at)} • {(orderInfo?.items?.length ?? 0)} item
+                              </div>
 
                                 <div className="mt-2 text-sm">
                                   {Array.isArray(orderInfo?.items) && orderInfo.items.length > 0 ? (

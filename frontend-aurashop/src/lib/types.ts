@@ -55,6 +55,7 @@ export interface Payment {
   status: string;
   paymentMethod: string;
   created_at: string;
+  paid_at?: string; // 🆕 tambahkan ini
 }
 
 export interface User {
