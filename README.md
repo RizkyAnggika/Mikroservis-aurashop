@@ -45,18 +45,20 @@ Pastikan sudah terinstall:
 ```bash
 git clone https://github.com/username/aurashop-microservices.git
 cd aurashop-microservices
-  
+```
+
 ### 3️⃣ Jalankan Semua Service
+```
 docker compose up --build
-
+```
 Tunggu proses selesai. Jika berhasil, akan muncul log seperti:
-
+```
 ✅ MySQL Pool connected to database
 🚀 Order Service running on port 5001
 🚀 Inventory Service running on port 4001
 🚀 Cashier Service running on port 4002
 VITE v5.0  ready in 1500ms
-
+```
 ### 4️⃣ Akses Aplikasi
 
 Frontend (React): http://localhost:5173
@@ -70,6 +72,6 @@ Cashier API: http://localhost:4002/api/payments
 Database (MySQL): localhost:3306 user:root, pass:root
 
 ### 5️⃣ (Opsional) Jalankan di Background
-
+```
 docker compose up -d
-
+```
