@@ -3,10 +3,10 @@
 ## 👥 Anggota Kelompok
 | Nama | Peran | Tugas |
 |------|--------|-------|
-| [Ezekiel Griffin Dave (42230011) ] | Backend Developer | Order Service|
-| [Willybrodus Stephanus Da Costa(42230015)] | Backend Developer | Inventory Service |
-| [Inyoman Rizky Anggika (42230052)] | Frontend Developer | Web Frontend (Vite + React) |
-| [I GustiNathanAgungTanaka (42230038)] | Backend Developer | Cashier Service |
+| [ Ezekiel Griffin Dave (42230011) ] | Backend Developer | Order Service|
+| [ Willybrodus Stephanus Da Costa(42230015) ] | Backend Developer | Inventory Service |
+| [ I Nyoman Rizky Anggika (42230052) ] | Frontend Developer | Web Frontend (Vite + React) |
+| [ I GustiNathanAgungTanaka (42230038) ] | Backend Developer | Cashier Service |
 
 
 ---
