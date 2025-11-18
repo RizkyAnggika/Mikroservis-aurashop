@@ -4,7 +4,7 @@
 | Nama | Peran | Tugas |
 |------|--------|-------|
 | [Ezekiel Griffin Dave (42230011) ] | Backend Developer | Order Service|
-| [Wilson] | Backend Developer | Inventory Service |
+| [Willybrodus Stephanus Da Costa(42230015)] | Backend Developer | Inventory Service |
 | [Rizky] | Frontend Developer | Web Frontend (Vite + React) |
 | [Nathan] | Backend Developer | Cashier Service |
 
