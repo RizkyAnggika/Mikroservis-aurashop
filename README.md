@@ -3,7 +3,7 @@
 ## 👥 Anggota Kelompok
 | Nama | Peran | Tugas |
 |------|--------|-------|
-| [Dave] | Backend Developer | Order Service|
+| [Ezekiel Griffin Dave (42230011) ] | Backend Developer | Order Service|
 | [Wilson] | Backend Developer | Inventory Service |
 | [Rizky] | Frontend Developer | Web Frontend (Vite + React) |
 | [Nathan] | Backend Developer | Cashier Service |
