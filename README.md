@@ -1,4 +1,4 @@
-# 🛍️ AuraShop Microservices System
+# 🛍️ AuraTeaShop Microservices System
 
 ## 👥 Anggota Kelompok
 | Nama | Peran | Tugas |
@@ -19,7 +19,7 @@ Aplikasi ini dikembangkan untuk membantu pengelolaan pesanan, inventori produk, 
 
 ## 📦 Deskripsi Singkat Proyek
 
-AuraShop merupakan sistem berbasis **microservices** yang terdiri dari beberapa komponen utama:
+AuraTeaShop merupakan sistem berbasis **microservices** yang terdiri dari beberapa komponen utama:
 
 | Service | Port | Deskripsi |
 |----------|------|-----------|
