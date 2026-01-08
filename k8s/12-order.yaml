@@ -21,9 +21,9 @@ spec:
             - containerPort: 5001
           envFrom:
             - configMapRef:
-                name: order-config
+                name: inventory-config
             - secretRef:
-                name: order-secret
+                name: inventory-secret
 ---
 apiVersion: v1
 kind: Service
