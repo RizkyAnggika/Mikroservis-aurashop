@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kasir-service
+  namespace: aurashop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kasir-service
+  template:
+    metadata:
+      labels:
+        app: kasir-service
+    spec:
+      containers:
+        - name: kasir
+          image: wilsondacosta/aurashop-kasir:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4002
+          envFrom:
+            - configMapRef:
+                name: inventory-config
+            - secretRef:
+                name: inventory-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kasir-service
+  namespace: aurashop
+spec:
+  type: ClusterIP
+  selector:
+    app: kasir-service
+  ports:
+    - port: 4002
+      targetPort: 4002
