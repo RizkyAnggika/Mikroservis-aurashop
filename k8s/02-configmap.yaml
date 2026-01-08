@@ -11,3 +11,6 @@ data:
   KASIR_PORT: "4002"
   INVENTORY_SERVICE_URL: http://inventory-service:4001/api/inventory 
   ORDER_SERVICE_URL: http://order-service:5001/api/orders
+  ITE_API_URL: http://inventory-service:4001/api/inventory
+  VITE_ORDER_API: http://order-service:5001/api/orders
+  VITE_PAYMENT_API: http://kasir-service:4002/api
