@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order
-          image: excitemax/aurashop-order:1.0
+          image: dave7890/aurashop-order:1.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
