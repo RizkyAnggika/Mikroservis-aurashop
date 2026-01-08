@@ -8,3 +8,6 @@ data:
   DB_PORT: "3306"
   INVENTORY_PORT: "4001"
   ORDER_PORT: "5001"
+  KASIR_PORT: "4002"
+  INVENTORY_SERVICE_URL: http://inventory-service:4001/api/inventory 
+  ORDER_SERVICE_URL: http://order-service:5001/api/orders
