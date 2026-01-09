@@ -12,6 +12,11 @@ spec:
       labels:
         app: kasir
     spec:
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mysql 3306; do echo "waiting mysql..."; sleep 2; done;']
+
       containers:
         - name: kasir
           image: kasir-service:latest
@@ -26,7 +31,7 @@ spec:
           env:
             - name: ORDER_URL
               value: http://order:5001/api/orders
-          command: ["sh", "-c", "sleep 25 && npm run dev"]
+          command: ["npm", "run", "dev"]
 ---
 apiVersion: v1
 kind: Service
