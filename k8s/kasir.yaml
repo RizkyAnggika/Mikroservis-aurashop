@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kasir
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kasir
+  template:
+    metadata:
+      labels:
+        app: kasir
+    spec:
+      containers:
+        - name: kasir
+          image: kasir-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4002
+          envFrom:
+            - configMapRef:
+                name: mysql-config
+            - secretRef:
+                name: mysql-secret
+          env:
+            - name: ORDER_URL
+              value: http://order:5001/api/orders
+          command: ["sh", "-c", "sleep 25 && npm run dev"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kasir
+spec:
+  type: NodePort
+  selector:
+    app: kasir
+  ports:
+    - port: 4002
+      targetPort: 4002
+      nodePort: 30003
